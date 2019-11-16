@@ -4,6 +4,20 @@
 ### EM Solver in 2D, official version!
 Requires numpy, matplotlib
 
+### Usage
+See ```user_test.py``` for example.
+
+```python
+from user_solver import Solver
+```
+
+Instantiate Solver object with chosen parameters.
+``` python
+solver = Solver(sigma_w, omega_0, s, stability)
+```
+
+
+
 
 ### Change Log
 
