@@ -1,10 +1,10 @@
 2D_Solver_Test
 ==============
 
-### EM Solver in 2D, official version!
+## EM Solver in 2D, official version!
 Requires numpy, matplotlib
 
-### Usage
+## Usage
 See ```user_test.py``` for example.
 
 ```python
@@ -20,17 +20,17 @@ Call the solve method for animation to begin.
 ```python
 solver.solve()
 ```
-#### Optional:
+### Optional:
 These can be called before using the ```solve()``` method. 
 
-##### Changing boundary properties
+#### Changing boundary properties
 Change boundaries of simulation to reflective walls (default walls absorb).  
 Note that calling the function without arguments will set all walls to reflective.
 ```python
 solver.set_reflect_boundaries(up=True, down=True, left=False, right=False)
 ```
 
-##### Adding materials
+#### Adding materials
 A rectangular reflective or refractive object can be added by the following methods.
 
 The upper left and lower right parameters specify an iterable which contains the coordinates of the
@@ -41,21 +41,21 @@ solver.add_reflect_square(upper_left= (i1, j1), lower_right=(i2, j2))
 solver.add_material_square(upper_left= (i3, j3), lower_right=(i4, j4), epsilon_rel, mu_rel)
 ```
 
-### Change Log
+## Change Log
 
 
 * 30/10/2019 Intiated
 * 16/11/2019 Migrated; changed to OOP style, added user usage sample
 
-### TODO
+## TODO
 
 * Plane wave excitation
 * Save images as gif functionality
 * Oscillating pulse (should inherit Pulse class)
 
-### Questions
+## Questions
 
-#### Measuring entropy?
+### Measuring entropy?
 1. Use reflecting walls such that energy is conserved
 2. Collect all values in the matrix 
 3. Use some method to measure the standard deviation between all points (or variance)
