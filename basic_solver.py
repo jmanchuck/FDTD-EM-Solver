@@ -117,22 +117,18 @@ def update(time):
             math.exp(-((time - pulseMid) ** 2) / (2 * (sigma_t ** 2))))
         h[size//2][size//2] = magnitude
 
-    # reflecting boundary for square h
-    h[row_upper:row_lower, col_left:col_right] = 0
-
     # update ex and ey, notice that we do not update the top and bottom row, first and last column
     ex[1:-1, : ] = ex_prev[1:-1, :] + eps_arr[1:, : ] * (h[1:, : ] - h[:-1, : ])
     ey[ :, 1:-1] = ey_prev[:, 1:-1] - eps_arr[ :, 1:] * (h[ :, 1:] - h[ :, :-1])
 
     # absorption boundaries
+    # h[0, :] = h[0, :] * (1 - (c * dt / ds)) + h[1, :] * (c * dt / ds)
     ex[0, :] = ex_prev[0, :] * (1 - (c * dt / ds)) + ex_prev[1, :] * (c * dt / ds)
     ey[0, : ] = ey_prev[0, : ] * (1 - (c * dt / ds)) + ey_prev[1, : ] * (c * dt / ds)
+    # h[-1, :] = h[-1, :] * (1 - (c * dt / ds)) + h[-2, :] * (c * dt / ds)
     ex[-1, :] = ex_prev[-1, :] * (1 - (c * dt / ds)) + ex_prev[-2, :] * (c * dt / ds)
     ey[-1, : ] = ey_prev[-1, : ] * (1 - (c * dt / ds)) + ey_prev[-2, : ] * (c * dt / ds)
 
-    # reflecting boundary for square ex and ey
-    ex[row_upper:row_lower, col_left:col_right] = 0
-    ey[row_upper:row_lower, col_left:col_right] = 0
     step += 1
 
     return h
