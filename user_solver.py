@@ -71,7 +71,7 @@ class Solver:
         self.reflectors.append(reflect_arr)
 
     # manually set the boundaries to reflect, on default call it sets all boundaries to be reflective
-    def set_boundaries(self, up=True, down=True, left=True, right=True):
+    def set_reflect_boundaries(self, up=True, down=True, left=True, right=True):
         self.boundaries = [up, down, left, right]
 
     def update(self, time):

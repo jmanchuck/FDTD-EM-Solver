@@ -14,6 +14,10 @@ print(solver.size)
 solver.add_reflect_square((0, 0), (solver.size // 4, solver.size // 4))
 
 # change the boundary to have reflect on the bottom
-solver.set_boundaries(up=False, down=True, left=False, right=False)
+solver.set_reflect_boundaries(up=False, down=True, left=False, right=False)
+
+# add a material in the bottom right
+solver.add_material_square((3 * solver.size // 4, 3 * solver.size // 4), (4 * solver.size // 5, 4 * solver.size // 5),
+                           epsilon_rel=8)
 
 solver.solve()
