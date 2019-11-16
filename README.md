@@ -1,28 +1,26 @@
 2D_Solver_Test
 ==============
 
-### EM Solver in 2D, in testing...
+### EM Solver in 2D, official version!
 Requires numpy, matplotlib
 
 
 ### Change Log
 
 
-* 30/10/2019 added stuff
+* 30/10/2019 Intiated
+* 16/11/2019 Migrated; changed to OOP style, added user usage sample
 
 ### TODO
 
-* Add epsilon and mu matrices
-* Change matrix algebra method
+* Plane wave excitation
+* Save images as gif functionality
+* Oscillating pulse (should inherit Pulse class)
 
 ### Questions
 
-* When adding Gaussian source to H field, do we immediately
-use update equations on E_x and E_y using this value?
-
-* Should we try to normalise our values? How to choose a Gaussian
-such that we have good values to look at?
-
-* How to test whether our update equations are working well?
-
-* How does the vector/matrix addition work in Matlab?
+#### Measuring entropy?
+1. Use reflecting walls such that energy is conserved
+2. Collect all values in the matrix 
+3. Use some method to measure the standard deviation between all points (or variance)
+4. Create plot over time of this value, can possibly be entropy

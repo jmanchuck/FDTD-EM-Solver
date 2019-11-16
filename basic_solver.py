@@ -111,15 +111,26 @@ def update(time):
     # update h
     h = h_prev + mu_arr * ((ex_prev[1:] - ex_prev[:-1]) - (ey_prev[:, 1:] - ey_prev[:, :-1]))
 
-    # override h bottom left with Gaussian
+    # override an h column with a plane wave
     if 0 < time < pulseMid * 5:
         magnitude = (-time + pulseMid) * (1 / (sigma_t * math.sqrt(2 * math.pi))) * (
             math.exp(-((time - pulseMid) ** 2) / (2 * (sigma_t ** 2))))
-        h[size//2][size//2] = magnitude
+        h[:, size//3] = magnitude
+        h[:, 1 + (size//3)] += mu_arr[:, 1 + (size // 3)] * magnitude
 
-    # update ex and ey, notice that we do not update the top and bottom row, first and last column
+    # update ex and ey, notice that we do not update the top or bottom row, first or last column
     ex[1:-1, : ] = ex_prev[1:-1, :] + eps_arr[1:, : ] * (h[1:, : ] - h[:-1, : ])
     ey[ :, 1:-1] = ey_prev[:, 1:-1] - eps_arr[ :, 1:] * (h[ :, 1:] - h[ :, :-1])
+
+    if 0 < time < pulseMid * 5:
+        magnitude = (-time + pulseMid) * (1 / (sigma_t * math.sqrt(2 * math.pi))) * (
+            math.exp(-((time - pulseMid) ** 2) / (2 * (sigma_t ** 2))))
+
+        # go left
+        # ey[ :, 1 + (size // 3)] -= eps_arr[:, 1 + (size // 3)] * magnitude
+
+        # go right
+        ey[ :, size // 3] += eps_arr[ :, size // 3] * magnitude
 
     # absorption boundaries
     # h[0, :] = h[0, :] * (1 - (c * dt / ds)) + h[1, :] * (c * dt / ds)
