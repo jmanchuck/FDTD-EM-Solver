@@ -12,58 +12,70 @@ EPSILON = 8.85 * (10 ** (-12))
 
 class Solver:
 
-    def __init__(self, sigma_w, omega_0, s, stability):
-        self.sigma_w = sigma_w
-        self.omega_0 = omega_0  # central frequency
+    def __init__(self, s, stability, simulation_time=1):
         self.s = s  # mesh points per wavelength
         self.stability = stability  # time mesh stability factor
 
-        self.epsilon_relative = 2  # change this to a list in the future
-        self.mu_relative = 1  # change this to a list
+        # Material dependent, default is vacuum
+        self.n_max = math.sqrt(1 * 1)
 
-        # Derived constants, calculate from user input but stays constant throughout simulation
-        self.n_max = math.sqrt(self.epsilon_relative * self.mu_relative)
-        self.sigma_t = 1 / self.sigma_w
-        self.omega_max = self.omega_0 + 3 * self.sigma_w
-        self.lambda_min = math.pi * 2 * C / (self.n_max * self.omega_max)
-        self.l_x, self.l_y = 30 * self.lambda_min, 30 * self.lambda_min  # size of simulation is 50 wavelengths
-        self.ds = self.lambda_min / s
-        self.dt = min(self.ds * stability / C, (4 * math.pi) / self.omega_max)
+        # Pulse dependent
+        self.omega_max = 0
+        self.lambda_min = None
+        self.l_x, self.l_y = None, None  # size of simulation is 50 wavelengths
+        self.ds = None
+        self.dt = None  # mesh stability and Nyquist criterion
 
         # simulation time in realtime and steps, length in real length
-        self.steps = 1500
-        self.end_time = self.dt * self.steps
-        self.size = int(self.l_x / self.ds)
+        self.steps = None
+        self.end_time = simulation_time
+        self.size = None
 
         # simulation variables
         self.time = 0
         self.step = 0
+        self.h = None
+        self.ex = None
+        self.ey = None
+        self.entropy = []
+
+        # material properties matrix
+        self.eps_arr = None
+        self.mu_arr = None
+
+        # simulation
+        self.reflect = False
+        self.reflectors = []
+        self.boundaries = [False, False, False, False]  # up, down, left, right: True=reflect, False=absorb
+        self.pulses = []
+        self.pulses_max = 0
+
+    def update_constants(self):
+        # Derived constants, calculate from user input but stays constant throughout simulation
+
+        self.lambda_min = math.pi * 2 * C / (self.n_max * self.omega_max)
+        self.l_x, self.l_y = 30 * self.lambda_min, 30 * self.lambda_min  # size of simulation is 50 wavelengths
+        self.ds = self.lambda_min / self.s
+        self.dt = min(self.ds * self.stability / C, math.pi / self.omega_max) # mesh stability and Nyquist criterion
+        self.size = int(self.l_x / self.ds)
+
+        # Resize matrices
         self.h = np.zeros((self.size, self.size))
         self.ex = np.zeros((self.size + 1, self.size))
         self.ey = np.zeros((self.size, self.size + 1))
 
-        # animation plotting
-        self.frames = np.arange(0, self.end_time, self.dt)
-        print(self.frames)
-        self.fig, self.ax = plt.subplots()
+        self.steps = self.end_time / self.dt
 
         # material properties matrix
         self.eps_arr = (self.dt / self.ds) * (np.ones((self.size, self.size)) / EPSILON)
         self.mu_arr = (self.dt / self.ds) * (np.ones((self.size, self.size)) / MU)
 
-        # simulation
-        # self.ready = False
-        self.reflect = False
-        self.reflectors = []
-        self.boundaries = [False, False, False, False]  # up, down, left, right: True=reflect, False=absorb
-        self.pulse = Pulse(self.sigma_t, self.dt)
-        self.pulse_max = self.pulse.maxima()
-        self.pulse_pos = [self.size // 2, self.size // 2]
-
     def add_material_square(self, upper_left, lower_right, epsilon_rel=1, mu_rel=1):
         # adding square material in top right by default for now
         self.eps_arr[upper_left[0]:lower_right[0], upper_left[1]:lower_right[1]] *= epsilon_rel
         self.mu_arr[upper_left[0]:lower_right[0], upper_left[1]:lower_right[1]] *= mu_rel
+
+        self.n_max = math.sqrt((np.max(self.eps_arr) / EPSILON) * (np.max(self.mu_arr) / MU))
 
     def add_reflect_square(self, upper_left, lower_right):
         self.reflect = True
@@ -73,6 +85,28 @@ class Solver:
     # manually set the boundaries to reflect, on default call it sets all boundaries to be reflective
     def set_reflect_boundaries(self, up=True, down=True, left=True, right=True):
         self.boundaries = [up, down, left, right]
+
+    def add_oscillating_pulse(self, sigma_w, location, omega_0, start_time=0, direction=None):
+        if 3 * sigma_w + omega_0 > self.omega_max:
+            self.omega_max = 3 * sigma_w + omega_0
+            self.update_constants()
+        new_pulse = Pulse(sigma_w=sigma_w, dt=self.dt, location=location, omega_0=omega_0, start_time=start_time, type="oscillate", direction=direction)
+        self.load_pulse(new_pulse)
+
+    def add_gaussian_pulse(self, sigma_w, location, start_time=0, direction=None):
+        if 3 * sigma_w > self.omega_max:
+            self.omega_max = 3 * sigma_w
+            self.update_constants()
+        new_pulse = Pulse(sigma_w=sigma_w, dt=self.dt, location=location, start_time=start_time, type="gd", direction=direction)
+        self.load_pulse(new_pulse)
+
+    def load_pulse(self, pulse):
+        self.pulses.append(pulse)
+        if pulse.maximum() > self.pulses_max:
+            self.pulses_max = pulse.maximum()
+
+    def ready(self):
+        return len(self.pulses) > 0
 
     def update(self, time):
         h_prev = self.h
@@ -84,10 +118,14 @@ class Solver:
         # update h pulse here
 
         # override h bottom left with Gaussian
-        if 0 < time < self.pulse.end_time:
-            magnitude = self.pulse.magnitude(time)
-            self.h[self.pulse_pos[0]][self.pulse_pos[1]] = magnitude
-            # print(magnitude)
+        for pulse in self.pulses:
+            if pulse.start_time() < time < pulse.end_time():
+                magnitude = pulse.magnitude(time)
+                if pulse.type() == "plane":
+                    pass
+                else:
+                    self.h[pulse.row()][pulse.col()] = magnitude
+                # print(magnitude)
 
         # if we have reflecting squares
         if self.reflect:
@@ -125,29 +163,60 @@ class Solver:
 
         self.step += 1
 
+        self.entropy.append(self.stdev_h())
+
         return self.h
 
     def solve(self):
 
+        if not self.ready():
+            raise Exception('No pulse added')
+        # instantiate animation plotting variables
+        frames = np.arange(0, self.end_time, self.dt)
+        fig, ax1 = plt.subplots(figsize=(6, 6))
+
+        im = ax1.imshow(self.h, animated=True, vmax=self.pulses_max, vmin=-self.pulses_max, aspect='auto',
+                        cmap='seismic')
+        ax1.set_aspect('equal', 'box')
+        ax1.xaxis.set_ticks_position('top')  # the rest is the same
+        ax1.xaxis.set_label_position('top')
+        fig.colorbar(im, ax=ax1)
+
         def animate(time):
             if self.step % 10 == 0:
-                self.ax.set_title("Time Step = {}".format(self.step))
+                fig.suptitle("Time Step = {}".format(self.step))
                 # plt.savefig('figs/' + str(int(step/50)) + '.png')
 
             im.set_array(self.update(time))
             return im,
 
-        im = plt.imshow(self.h, animated=True, vmax=self.pulse_max, vmin=-self.pulse_max, aspect='auto')
-        plt.set_cmap('seismic')
-        self.ax.xaxis.set_ticks_position('top')  # the rest is the same
-        self.ax.xaxis.set_label_position('top')
-        self.fig.colorbar(im)
+        anim = animation.FuncAnimation(fig, animate, frames=frames, interval=1, blit=False, repeat=False)
 
-        anim = animation.FuncAnimation(self.fig, animate, frames=self.frames, interval=1, blit=False, repeat=False)
         plt.show()
-        exit()
 
+    def solve_entropy(self):
 
+        frames = np.arange(0, self.end_time, self.dt)
+        fig, ax = plt.subplots()
+        x_data = frames[self.pulse.end_step:]
+        y_data = []
+        ax.set_xlim(self.pulse.end_time(), self.end_time)
+        ax.set_ylim(0, 0.01)
+
+        for i in frames:
+            self.update(i)
+            if i > self.pulse.end_time():
+                y_data.append(1 / self.stdev_h())
+
+        ax.set_ylim(0, max(y_data) * 1.1)
+        plt.plot(x_data, y_data)
+
+        plt.show()
+
+    def stdev_h(self):
+        return np.std(np.absolute(self.h))
+
+# this class should be hidden from the user, user should NOT be able to access this class
 class Pulse:
     """
     This is only for Gaussian derivative, in the future this will be
@@ -161,45 +230,102 @@ class Pulse:
         other types of pulses
     """
 
-    def __init__(self, sigma_t, dt, type="gd", f_0=None):
+    def __init__(self, sigma_w, dt, location, start_time, type, omega_0=0, direction=None):
         # Gaussian derivative properties
-        self.sigma_t = sigma_t
+        TYPES = ["gd", "oscillate"]
+        DIRECTIONS = ["up", "down", "left", "right", None]
+        self.sigma_w = sigma_w
+        self.sigma_t = 1 / self.sigma_w
         self.dt = dt
-        self.pulseMid = 3 * sigma_t  # the middle of the gaussian derivative (approximate)
-        self._maxima = self.calc_maxima()
-        self.end_time = self.pulseMid * 5
+        self.pulseMid = 3 * self.sigma_t  # the middle of the gaussian derivative (approximate)
+        self._start_time = start_time
+        self._end_time = self._start_time + self.pulseMid * 8
+        self._location = location
+        self._type = type
+        self._maximum = self.calculate_max()
+        self.omega_0 = omega_0
+        self._omega_max = 3 * self.sigma_w + self.omega_0
+        self.direction = direction
+        self._end_step = int(1 + (self._end_time // self.dt))
+
+        if self._type not in TYPES:
+            raise Exception("Pulse type not recognised: {}".format(self._type))
+
+        if self.direction not in DIRECTIONS:
+            raise Exception("Pulse direction not recognised: {}".format(self.direction))
+
+        if self._type == "oscillate" and not self.omega_0:
+            raise Exception("Missing arguments f_0: {}".format(self.omega_0))
 
     def magnitude(self, time):
-        return (-time + self.pulseMid) * (1 / (self.sigma_t * math.sqrt(2 * math.pi))) * (
-            math.exp(-((time - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
+        # shift the calculation
+        time -= self._start_time
+        if self._type == "gd":
+            return (-time + self.pulseMid) * (1 / (self.sigma_t * math.sqrt(2 * math.pi))) * (
+                math.exp(-((time - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
+        if self._type == "oscillate":
+            return math.cos(time * self.omega_0) * (1 / (self.sigma_t * math.sqrt(2 * math.pi))) * (
+                math.exp(-((time - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
 
-    def calc_maxima(self):
+    def calculate_max(self):
+        """
+        :return: the maximum of the pulse via calculating values until turning point
+        """
         t = 0
         current = 0
         prev = 0
-        while t < self.pulseMid:
-            current = (-t + self.pulseMid) * (1 / (self.sigma_t * math.sqrt(2 * math.pi))) * (
-                math.exp(-((t - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
+        while t < 2 * self.pulseMid:
+            if self._type == "gd":
+                current = (-t + self.pulseMid) * (1 / (self.sigma_t * math.sqrt(2 * math.pi))) * (
+                    math.exp(-((t - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
+            elif self._type == "oscillate":
+                current = (1 / (self.sigma_t * math.sqrt(2 * math.pi))) * (
+                    math.exp(-((t - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
+
+            # if turning point found
             if current < prev:
                 return prev
             t += self.dt
             prev = current
-        return current
 
-    def maxima(self):
-        return self._maxima
+        raise Exception("Could not find maximum")
+
+    def maximum(self):
+        return self._maximum
+
+    def start_time(self):
+        return self._start_time
 
     def end_time(self):
-        return self.end_time
+        return self._end_time
+
+    def end_step(self):
+        return self._end_step
+
+    def omega_max(self):
+        return self._omega_max
+
+    def row(self):
+        return self._location[0]
+
+    def col(self):
+        return self._location[1]
+
+    def type(self):
+        return self._type
 
     def plot(self):
         data = []
         t = 0
         while t < 5 * self.pulseMid:
-            gauss = (-t + self.pulseMid) * (1 / (self.sigma_t * math.sqrt(2 * math.pi))) * (
-                math.exp(-((t - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
+            if self._type == "gd":
+                value = (-t + self.pulseMid) * (1 / (self.sigma_t * math.sqrt(2 * math.pi))) * (
+                    math.exp(-((t - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
+            elif self._type == "oscillate":
+                value = math.cos(t * self.omega_0) * (1 / (self.sigma_t * math.sqrt(2 * math.pi))) * (
+                    math.exp(-((t - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
             t += self.dt
-            data.append(gauss)
+            data.append(value)
         plt.plot(data)
         plt.show()
         exit()
@@ -215,6 +341,8 @@ if __name__ == '__main__':
     omega_0 = 0  # central frequency
     s = 10  # mesh points per wavelength
     stability = 0.2  # time mesh stability factor
-    solver = Solver(sigma_w=sigma_w, omega_0=omega_0, s=s, stability=stability)
+    solver = Solver(s=s, stability=stability, simulation_time=1000)
+    solver.set_reflect_boundaries()
+    solver.add_gaussian_pulse(sigma_w, (150, 150))
     solver.solve()
     exit()
