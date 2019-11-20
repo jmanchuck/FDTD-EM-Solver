@@ -7,19 +7,8 @@ Requires numpy, matplotlib
 ## Usage
 See ```user_test.py``` for example.
 
-```python
-from user_solver import Solver
-```
+// TODO
 
-Instantiate Solver object with chosen parameters.
-``` python
-# note s is sampling points per wavelength
-solver = Solver(sigma_w, omega_0, s, stability)
-```
-Call the solve method for animation to begin.
-```python
-solver.solve()
-```
 ### Optional:
 These can be called before using the ```solve()``` method. 
 
@@ -46,17 +35,17 @@ solver.add_material_square(upper_left= (i3, j3), lower_right=(i4, j4), epsilon_r
 
 * 30/10/2019 Intiated
 * 16/11/2019 Migrated; changed to OOP style, added user usage sample
+* 20/11/2019 Added oscillating pulse, changed user input settings
 
 ## TODO
 
 * Plane wave excitation
 * Save images as gif functionality
-* Oscillating pulse (should inherit Pulse class)
 
 ## Questions
 
 ### Measuring entropy?
 1. Use reflecting walls such that energy is conserved
-2. Collect all values in the matrix 
+2. Collect all values in the matrix (calculate energy)
 3. Use some method to measure the standard deviation between all points (or variance)
 4. Create plot over time of this value, can possibly be entropy
