@@ -116,7 +116,12 @@ def update(time):
         magnitude = (-time + pulseMid) * (1 / (sigma_t * math.sqrt(2 * math.pi))) * (
             math.exp(-((time - pulseMid) ** 2) / (2 * (sigma_t ** 2))))
         h[:, size//3] = magnitude
-        h[:, 1 + (size//3)] += mu_arr[:, 1 + (size // 3)] * magnitude
+
+        # go left
+        h[:, 1 + (size//3)] -= mu_arr[:, 1 + (size // 3)] * magnitude
+
+        # go right
+        # h[:, (size // 3)] += mu_arr[:, (size // 3)] * magnitude
 
     # update ex and ey, notice that we do not update the top or bottom row, first or last column
     ex[1:-1, : ] = ex_prev[1:-1, :] + eps_arr[1:, : ] * (h[1:, : ] - h[:-1, : ])
@@ -127,10 +132,10 @@ def update(time):
             math.exp(-((time - pulseMid) ** 2) / (2 * (sigma_t ** 2))))
 
         # go left
-        # ey[ :, 1 + (size // 3)] -= eps_arr[:, 1 + (size // 3)] * magnitude
+        ey[ :, 1 + (size // 3)] -= eps_arr[:, 1 + (size // 3)] * magnitude
 
         # go right
-        ey[ :, size // 3] += eps_arr[ :, size // 3] * magnitude
+        # ey[ :, size // 3] += eps_arr[ :, size // 3] * magnitude
 
     # absorption boundaries
     # h[0, :] = h[0, :] * (1 - (c * dt / ds)) + h[1, :] * (c * dt / ds)

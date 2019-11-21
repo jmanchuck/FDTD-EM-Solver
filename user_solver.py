@@ -115,14 +115,20 @@ class Solver:
 
         self.h = h_prev + self.mu_arr * ((ex_prev[1:] - ex_prev[:-1]) - (ey_prev[:, 1:] - ey_prev[:, :-1]))
 
-        # update h pulse here
-
-        # override h bottom left with Gaussian
+        # override h field for pulse
         for pulse in self.pulses:
             if pulse.start_time() < time < pulse.end_time():
                 magnitude = pulse.magnitude(time)
-                if pulse.type() == "plane":
-                    pass
+                if not pulse.direction() is None:
+                    self.h[:, pulse.col()] = magnitude
+                    if pulse.direction() == "left":
+                        self.h[:, 1 + pulse.col()] -= self.mu_arr[:, 1 + pulse.col()] * magnitude
+                    elif pulse.direction() == "right":
+                        self.h[:, pulse.col()] += self.mu_arr[:, pulse.col()] * magnitude
+                    elif pulse.direction() == "up":
+                        self.h[1 + pulse.row(), :] -= self.mu_arr[1 + pulse.row(), :] * magnitude
+                    elif pulse.direction() == "down":
+                        self.h[pulse.row(), :] -= self.mu_arr[pulse.row(), :] * magnitude
                 else:
                     self.h[pulse.row()][pulse.col()] = magnitude
                 # print(magnitude)
@@ -136,6 +142,18 @@ class Solver:
         # update ex and ey, notice that we do not update the top and bottom row, first and last column
         self.ex[1:-1, :] = ex_prev[1:-1, :] + self.eps_arr[1:, :] * (self.h[1:, :] - self.h[:-1, :])
         self.ey[:, 1:-1] = ey_prev[:, 1:-1] - self.eps_arr[:, 1:] * (self.h[:, 1:] - self.h[:, :-1])
+
+        for pulse in self.pulses:
+            magnitude = pulse.magnitude(time)
+            if not pulse.direction() is None:
+                if pulse.direction() == "left":
+                    self.ey[:, 1 + pulse.col()] -= self.eps_arr[:, 1 + pulse.col()] * magnitude
+                elif pulse.direction() == "right":
+                    self.ey[:, pulse.col()] += self.eps_arr[:, pulse.col()] * magnitude
+                elif pulse.direction() == "up":
+                    self.ey[1 + pulse.row(), :] -= self.eps_arr[1 + pulse.row(), :] * magnitude
+                elif pulse.direction() == "down":
+                    self.ex[pulse.row(), :] += self.eps_arr[pulse.row(), :] * magnitude
 
         # if the boundary is NOT reflective, apply absorb equation, order is up, down, left and right borders
         if not self.boundaries[0]:
@@ -155,6 +173,7 @@ class Solver:
             self.ex[:, -1] = ex_prev[:, -1] * (1 - (C * self.dt / self.ds)) + ex_prev[:, -2] * (C * self.dt / self.ds)
             self.ey[:, -1] = ey_prev[:, -1] * (1 - (C * self.dt / self.ds)) + ey_prev[:, -2] * (C * self.dt / self.ds)
 
+        # overriding values for reflecting squares or objects that were added
         if self.reflect:
             for square in self.reflectors:
                 # reflecting boundary for square ex and ey
@@ -162,8 +181,6 @@ class Solver:
                 self.ey[square[0]:square[1], square[2]:square[3]] = 0
 
         self.step += 1
-
-        self.entropy.append(self.stdev_h())
 
         return self.h
 
@@ -194,27 +211,6 @@ class Solver:
 
         plt.show()
 
-    def solve_entropy(self):
-
-        frames = np.arange(0, self.end_time, self.dt)
-        fig, ax = plt.subplots()
-        x_data = frames[self.pulse.end_step:]
-        y_data = []
-        ax.set_xlim(self.pulse.end_time(), self.end_time)
-        ax.set_ylim(0, 0.01)
-
-        for i in frames:
-            self.update(i)
-            if i > self.pulse.end_time():
-                y_data.append(1 / self.stdev_h())
-
-        ax.set_ylim(0, max(y_data) * 1.1)
-        plt.plot(x_data, y_data)
-
-        plt.show()
-
-    def stdev_h(self):
-        return np.std(np.absolute(self.h))
 
 # this class should be hidden from the user, user should NOT be able to access this class
 class Pulse:
@@ -245,13 +241,13 @@ class Pulse:
         self._maximum = self.calculate_max()
         self.omega_0 = omega_0
         self._omega_max = 3 * self.sigma_w + self.omega_0
-        self.direction = direction
+        self._direction = direction
         self._end_step = int(1 + (self._end_time // self.dt))
 
         if self._type not in TYPES:
             raise Exception("Pulse type not recognised: {}".format(self._type))
 
-        if self.direction not in DIRECTIONS:
+        if self._direction not in DIRECTIONS:
             raise Exception("Pulse direction not recognised: {}".format(self.direction))
 
         if self._type == "oscillate" and not self.omega_0:
@@ -295,6 +291,9 @@ class Pulse:
 
     def start_time(self):
         return self._start_time
+
+    def direction(self):
+        return self._direction
 
     def end_time(self):
         return self._end_time
