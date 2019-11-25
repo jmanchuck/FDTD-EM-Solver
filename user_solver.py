@@ -109,10 +109,10 @@ class Solver:
         return len(self.pulses) > 0
 
     def update(self, time):
+
         h_prev = self.h
         ex_prev = self.ex
         ey_prev = self.ey
-
         self.h = h_prev + self.mu_arr * ((ex_prev[1:] - ex_prev[:-1]) - (ey_prev[:, 1:] - ey_prev[:, :-1]))
 
         # override h field for pulse
@@ -120,10 +120,13 @@ class Solver:
             if pulse.start_time() < time < pulse.end_time():
                 magnitude = pulse.magnitude(time)
                 if not pulse.direction() is None:
-                    self.h[:, pulse.col()] = magnitude
-                    if pulse.direction() == "left":
-                        self.h[:, 1 + pulse.col()] -= self.mu_arr[:, 1 + pulse.col()] * magnitude
-                    elif pulse.direction() == "right":
+                    if magnitude > 0:
+                        self.h[:, pulse.col()] = np.maximum(magnitude, self.h[:, pulse.col()])
+                    elif magnitude < 0:
+                        self.h[:, pulse.col()] = np.minimum(magnitude, self.h[:, pulse.col()])
+                    if pulse.direction() == "right":
+                        self.h[:, pulse.col()] -= self.mu_arr[:, pulse.col()] * magnitude
+                    elif pulse.direction() == "left":
                         self.h[:, pulse.col()] += self.mu_arr[:, pulse.col()] * magnitude
                     elif pulse.direction() == "up":
                         self.h[1 + pulse.row(), :] -= self.mu_arr[1 + pulse.row(), :] * magnitude
@@ -144,14 +147,14 @@ class Solver:
         self.ey[:, 1:-1] = ey_prev[:, 1:-1] - self.eps_arr[:, 1:] * (self.h[:, 1:] - self.h[:, :-1])
 
         for pulse in self.pulses:
-            magnitude = pulse.magnitude(time)
-            if not pulse.direction() is None:
-                if pulse.direction() == "left":
-                    self.ey[:, 1 + pulse.col()] -= self.eps_arr[:, 1 + pulse.col()] * magnitude
-                elif pulse.direction() == "right":
+            if not pulse.direction() is None and pulse.start_time() < time < pulse.end_time():
+                magnitude = pulse.magnitude(time)
+                if pulse.direction() == "right":
                     self.ey[:, pulse.col()] += self.eps_arr[:, pulse.col()] * magnitude
+                elif pulse.direction() == "left":
+                    self.ey[:, pulse.col()] += self.eps_arr[:, pulse.col()] * self.h[:, pulse.col()]
                 elif pulse.direction() == "up":
-                    self.ey[1 + pulse.row(), :] -= self.eps_arr[1 + pulse.row(), :] * magnitude
+                    self.ex[1 + pulse.row(), :] -= self.eps_arr[1 + pulse.row(), :] * magnitude
                 elif pulse.direction() == "down":
                     self.ex[pulse.row(), :] += self.eps_arr[pulse.row(), :] * magnitude
 
@@ -334,14 +337,52 @@ class Pulse:
 # - take into account epsilon max to determine how we will sample a wavelength (to get dx or ds)
 # - user inputs real time simulation length in seconds, use dt to calculate how many steps
 
+
+def test():
+    # initiate variables
+    sigma_w = 1  # frequency bandwidth
+    omega_0 = 3  # central frequency
+    s = 10  # mesh points per wavelength
+    stability = 0.2  # time mesh stability factor
+
+    # initiate solver with user input variables
+    solver = Solver(s=s, stability=stability, simulation_time=1000)
+
+    # add pulse
+    # solver.add_oscillating_pulse(sigma_w, (200, 150), omega_0, direction="right")
+
+    solver.add_gaussian_pulse(sigma_w, (200, 180), direction="right")
+
+    # add a reflecting square in top left
+    solver.add_reflect_square((3 * solver.size // 4, 3 * solver.size // 4), (-1, -1))
+
+    # change the boundary to have reflect on the bottom
+    solver.set_reflect_boundaries(up=True, down=True, left=True, right=True)
+
+    print(solver.steps)
+    print(solver.pulses[0].end_step())
+    # exit()
+
+    # add a material in the bottom right
+    # solver.add_material_square((3 * solver.size // 4, 3 * solver.size // 4), (4 * solver.size // 5, 4 * solver.size // 5),
+    #                            epsilon_rel=8)
+
+    solver.solve()
+
 if __name__ == '__main__':
+
+    test()
+    exit()
+
     # EXAMPLE INPUTS
     sigma_w = 1  # frequency bandwidth
     omega_0 = 0  # central frequency
     s = 10  # mesh points per wavelength
     stability = 0.2  # time mesh stability factor
     solver = Solver(s=s, stability=stability, simulation_time=1000)
-    solver.set_reflect_boundaries()
-    solver.add_gaussian_pulse(sigma_w, (150, 150))
+    solver.set_reflect_boundaries(down=False, right=False)
+    solver.add_gaussian_pulse(sigma_w, (50, 50))
+    solver.add_oscillating_pulse(sigma_w, (180, 180), omega_0=3, start_time=10)
+    solver.add_material_square((2 * solver.size//3, 0), (-1, solver.size//3), epsilon_rel=5, mu_rel=0.8)
     solver.solve()
     exit()
