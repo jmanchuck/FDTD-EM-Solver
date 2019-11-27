@@ -56,7 +56,7 @@ class Solver:
         self.lambda_min = math.pi * 2 * C / (self.n_max * self.omega_max)
         self.l_x, self.l_y = 30 * self.lambda_min, 30 * self.lambda_min  # size of simulation is 50 wavelengths
         self.ds = self.lambda_min / self.s
-        self.dt = min(self.ds * self.stability / C, math.pi / self.omega_max) # mesh stability and Nyquist criterion
+        self.dt = min(self.ds * self.stability / C, math.pi / self.omega_max)  # mesh stability and Nyquist criterion
         self.size = int(self.l_x / self.ds)
 
         # Resize matrices
@@ -90,14 +90,16 @@ class Solver:
         if 3 * sigma_w + omega_0 > self.omega_max:
             self.omega_max = 3 * sigma_w + omega_0
             self.update_constants()
-        new_pulse = Pulse(sigma_w=sigma_w, dt=self.dt, location=location, omega_0=omega_0, start_time=start_time, type="oscillate", direction=direction)
+        new_pulse = Pulse(sigma_w=sigma_w, dt=self.dt, location=location, omega_0=omega_0, start_time=start_time,
+                          type="oscillate", direction=direction)
         self.load_pulse(new_pulse)
 
     def add_gaussian_pulse(self, sigma_w, location, start_time=0, direction=None):
         if 3 * sigma_w > self.omega_max:
             self.omega_max = 3 * sigma_w
             self.update_constants()
-        new_pulse = Pulse(sigma_w=sigma_w, dt=self.dt, location=location, start_time=start_time, type="gd", direction=direction)
+        new_pulse = Pulse(sigma_w=sigma_w, dt=self.dt, location=location, start_time=start_time, type="gd",
+                          direction=direction)
         self.load_pulse(new_pulse)
 
     def load_pulse(self, pulse):
@@ -113,28 +115,32 @@ class Solver:
         h_prev = self.h
         ex_prev = self.ex
         ey_prev = self.ey
-        self.h = h_prev + self.mu_arr * ((ex_prev[1:] - ex_prev[:-1]) - (ey_prev[:, 1:] - ey_prev[:, :-1]))
 
         # override h field for pulse
         for pulse in self.pulses:
             if pulse.start_time() < time < pulse.end_time():
                 magnitude = pulse.magnitude(time)
-                if not pulse.direction() is None:
-                    if magnitude > 0:
-                        self.h[:, pulse.col()] = np.maximum(magnitude, self.h[:, pulse.col()])
-                    elif magnitude < 0:
-                        self.h[:, pulse.col()] = np.minimum(magnitude, self.h[:, pulse.col()])
-                    if pulse.direction() == "right":
-                        self.h[:, pulse.col()] -= self.mu_arr[:, pulse.col()] * magnitude
-                    elif pulse.direction() == "left":
-                        self.h[:, pulse.col()] += self.mu_arr[:, pulse.col()] * magnitude
-                    elif pulse.direction() == "up":
-                        self.h[1 + pulse.row(), :] -= self.mu_arr[1 + pulse.row(), :] * magnitude
-                    elif pulse.direction() == "down":
-                        self.h[pulse.row(), :] -= self.mu_arr[pulse.row(), :] * magnitude
-                else:
+                if pulse.direction() is None:
                     self.h[pulse.row()][pulse.col()] = magnitude
-                # print(magnitude)
+
+        self.h = h_prev + self.mu_arr * ((ex_prev[1:] - ex_prev[:-1]) - (ey_prev[:, 1:] - ey_prev[:, :-1]))
+
+        # override update equation at the TF/SF boundary
+        for pulse in self.pulses:
+            if pulse.start_time() < time < pulse.end_time() and not pulse.direction() is None:
+                if pulse.direction() == "right":
+                    # self.h[:, pulse.col()] = h_prev[:, pulse.col()] + self.mu_arr[:, pulse.col()] * \
+                    #                          ((ex_prev[1:, pulse.col()] - ex_prev[:-1, pulse.col()]) -
+                    #                           (ey_prev[:, 1 + pulse.col()] -
+                    #                            (ey_prev[:, pulse.col()] + pulse.magnitude(time) * math.sqrt(MU / EPSILON))))
+                    self.h[:, pulse.col()] += self.mu_arr[:, pulse.col()] * pulse.magnitude(time) * math.sqrt(MU / EPSILON)
+
+                elif pulse.direction() == "left":
+                    self.h[:, pulse.col()] += self.mu_arr[:, pulse.col()] * magnitude
+                elif pulse.direction() == "up":
+                    self.h[1 + pulse.row(), :] -= self.mu_arr[1 + pulse.row(), :] * magnitude
+                elif pulse.direction() == "down":
+                    self.h[pulse.row(), :] -= self.mu_arr[pulse.row(), :] * magnitude
 
         # if we have reflecting squares
         if self.reflect:
@@ -146,11 +152,12 @@ class Solver:
         self.ex[1:-1, :] = ex_prev[1:-1, :] + self.eps_arr[1:, :] * (self.h[1:, :] - self.h[:-1, :])
         self.ey[:, 1:-1] = ey_prev[:, 1:-1] - self.eps_arr[:, 1:] * (self.h[:, 1:] - self.h[:, :-1])
 
+        # override update equation at the TF/SF boundary
         for pulse in self.pulses:
-            if not pulse.direction() is None and pulse.start_time() < time < pulse.end_time():
-                magnitude = pulse.magnitude(time)
+            if pulse.start_time() < time < pulse.end_time() and not pulse.direction() is None:
                 if pulse.direction() == "right":
-                    self.ey[:, pulse.col()] += self.eps_arr[:, pulse.col()] * magnitude
+                    self.ey[:, pulse.col()] = ey_prev[:, pulse.col()] - self.eps_arr[:, pulse.col()] * (
+                                self.h[:, pulse.col()] - pulse.magnitude(time) - (self.h[:, pulse.col() - 1]))
                 elif pulse.direction() == "left":
                     self.ey[:, pulse.col()] += self.eps_arr[:, pulse.col()] * self.h[:, pulse.col()]
                 elif pulse.direction() == "up":
@@ -351,13 +358,13 @@ def test():
     # add pulse
     # solver.add_oscillating_pulse(sigma_w, (200, 150), omega_0, direction="right")
 
-    solver.add_gaussian_pulse(sigma_w, (200, 180), direction="right")
+    solver.add_gaussian_pulse(sigma_w, (200, 90), direction="right")
 
     # add a reflecting square in top left
-    solver.add_reflect_square((3 * solver.size // 4, 3 * solver.size // 4), (-1, -1))
+    solver.add_reflect_square((3 * solver.size // 8, 3 * solver.size // 8), (5 * solver.size // 8, 5 * solver.size // 8))
 
     # change the boundary to have reflect on the bottom
-    solver.set_reflect_boundaries(up=True, down=True, left=True, right=True)
+    solver.set_reflect_boundaries(up=True, down=True, left=False, right=True)
 
     print(solver.steps)
     print(solver.pulses[0].end_step())
@@ -369,8 +376,8 @@ def test():
 
     solver.solve()
 
-if __name__ == '__main__':
 
+if __name__ == '__main__':
     test()
     exit()
 
@@ -383,6 +390,6 @@ if __name__ == '__main__':
     solver.set_reflect_boundaries(down=False, right=False)
     solver.add_gaussian_pulse(sigma_w, (50, 50))
     solver.add_oscillating_pulse(sigma_w, (180, 180), omega_0=3, start_time=10)
-    solver.add_material_square((2 * solver.size//3, 0), (-1, solver.size//3), epsilon_rel=5, mu_rel=0.8)
+    solver.add_material_square((2 * solver.size // 3, 0), (-1, solver.size // 3), epsilon_rel=5, mu_rel=0.8)
     solver.solve()
     exit()
