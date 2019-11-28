@@ -115,10 +115,12 @@ def update(time):
     if 0 < time < pulseMid * 5:
         magnitude = (-time + pulseMid) * (1 / (sigma_t * math.sqrt(2 * math.pi))) * (
             math.exp(-((time - pulseMid) ** 2) / (2 * (sigma_t ** 2))))
-        h[:, size//3] = magnitude
+        h[:, size//3] = h_prev[:, size//3] + mu_arr[:, size//3] * ((ex_prev[1:, size//3] - ex_prev[:-1, size//3]) -
+                                                                   (ey_prev[:, size//3 + 1] - ey_prev[:, size//3] -
+                                                                    magnitude * math.sqrt(mu / c)))
 
         # go left
-        h[:, 1 + (size//3)] -= mu_arr[:, 1 + (size // 3)] * magnitude
+        # h[:, 1 + (size//3)] -= mu_arr[:, 1 + (size // 3)] * magnitude
 
         # go right
         # h[:, (size // 3)] += mu_arr[:, (size // 3)] * magnitude
@@ -131,8 +133,11 @@ def update(time):
         magnitude = (-time + pulseMid) * (1 / (sigma_t * math.sqrt(2 * math.pi))) * (
             math.exp(-((time - pulseMid) ** 2) / (2 * (sigma_t ** 2))))
 
+        # point source
+        h[size // 2, size // 2] = magnitude
+
         # go left
-        ey[ :, 1 + (size // 3)] -= eps_arr[:, 1 + (size // 3)] * magnitude
+        # ey[ :, 1 + (size // 3)] -= eps_arr[:, 1 + (size // 3)] * magnitude
 
         # go right
         # ey[ :, size // 3] += eps_arr[ :, size // 3] * magnitude
@@ -159,7 +164,7 @@ fig.colorbar(im)
 
 
 def animate(time):
-    if step % 10 == 0:
+    if step % 5 == 0:
         ax.set_title("Time Step = {}".format(step))
         # plt.savefig('figs/' + str(int(step/50)) + '.png')
 
