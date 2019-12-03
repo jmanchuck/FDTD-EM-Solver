@@ -5,7 +5,7 @@
 Requires numpy, matplotlib
 
 ## Usage
-See ```user_test.py``` for example.
+See ```tutorial.py``` for example.
 
 // TODO
 

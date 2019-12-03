@@ -11,8 +11,8 @@ EPSILON = 8.85 * (10 ** (-12))
 
 class Solver:
 
-    def __init__(self, s, stability, eps_r_max, mu_r_max, simulation_time=1):
-        self.s = s  # mesh points per wavelength
+    def __init__(self, points_per_wavelength, stability, eps_r_max, mu_r_max, simulation_time=1):
+        self.points_per_wavelength = points_per_wavelength  # mesh points per wavelength
         self.stability = stability  # time mesh stability factor
 
         # Material dependent, default is vacuum
@@ -21,7 +21,7 @@ class Solver:
         # Pulse dependent
         self.omega_max = 0
         self.lambda_min = None
-        self.l_x, self.l_y = None, None  # size of simulation is 50 wavelengths
+        self.length_x, self.length_y = None, None  # size of simulation is 50 wavelengths
         self.ds = None
         self.dt = None  # mesh stability and Nyquist criterion
 
@@ -50,10 +50,10 @@ class Solver:
     def update_constants(self):
         # Derived constants, calculate from user input but stays constant throughout simulation
         self.lambda_min = math.pi * 2 * C / (self.n_max * self.omega_max)
-        self.l_x, self.l_y = 20 * self.lambda_min, 20 * self.lambda_min  # size of simulation is 50 wavelengths
-        self.ds = self.lambda_min / self.s
+        self.length_x, self.length_y = 20 * self.lambda_min, 20 * self.lambda_min  # size of simulation is 50 wavelengths
+        self.ds = self.lambda_min / self.points_per_wavelength
         self.dt = min(self.ds * self.stability / C, math.pi / self.omega_max)  # mesh stability and Nyquist criterion
-        self.size = int(self.l_x / self.ds)
+        self.size = int(self.length_x / self.ds)
 
         # Resize matrices
         self.h = np.zeros((self.size, self.size))
@@ -115,6 +115,11 @@ class Solver:
     def ready(self):
         return len(self.pulses) > 0
 
+    def update_reflect(self):
+        for square in self.reflectors:
+            # reflecting boundary for square h
+            self.h[square[0]:square[1], square[2]:square[3]] = 0
+
     def update(self, time):
 
         h_prev = self.h
@@ -144,12 +149,10 @@ class Solver:
                     self.h[1 + pulse.row(), :] -= self.mu_arr[1 + pulse.row(), :] * magnitude
                 elif pulse.direction() == "down":
                     self.h[pulse.row(), :] -= self.mu_arr[pulse.row(), :] * magnitude
-        #
-        # # if we have reflecting squares
-        # if self.reflect:
-        #     for square in self.reflectors:
-        #         # reflecting boundary for square h
-        #         self.h[square[0]:square[1], square[2]:square[3]] = 0
+
+        # if we have reflecting squares
+        if self.reflect:
+            self.update_reflect()
 
         # update ex and ey, notice that we do not update the top and bottom row, first and last column
         self.ex[1:-1, :] = ex_prev[1:-1, :] + self.eps_arr[1:, :] * (self.h[1:, :] - self.h[:-1, :])
@@ -361,7 +364,7 @@ def plane_pulse():
     stability = 0.1  # time mesh stability factor
 
     # initiate solver with user input variables
-    solver = Solver(s=s, stability=stability, eps_r_max=1, mu_r_max=1, simulation_time=1000)
+    solver = Solver(points_per_wavelength=s, stability=stability, eps_r_max=1, mu_r_max=1, simulation_time=1000)
 
     # add pulse
     # solver.add_oscillating_pulse(sigma_w, (200, 150), omega_0, direction="right")
@@ -380,7 +383,7 @@ def point_pulse():
     omega_0 = 5  # central frequency
     s = 15  # mesh points per wavelength
     stability = 0.1  # time mesh stability factor
-    solver = Solver(s=s, stability=stability, eps_r_max=1, mu_r_max=1, simulation_time=400)
+    solver = Solver(points_per_wavelength=s, stability=stability, eps_r_max=1, mu_r_max=1, simulation_time=400)
     solver.set_reflect_boundaries()
     solver.add_gaussian_pulse(5, (150, 150), start_time=1)
     solver.add_oscillating_pulse(sigma_w, (20, 20), omega_0=20)
