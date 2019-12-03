@@ -40,6 +40,7 @@ class Solver:
         # material properties matrix
         self.eps_arr = None
         self.mu_arr = None
+        self.material = None
 
         # simulation
         self.reflect = False
@@ -50,7 +51,7 @@ class Solver:
     def update_constants(self):
         # Derived constants, calculate from user input but stays constant throughout simulation
         self.lambda_min = math.pi * 2 * C / (self.n_max * self.omega_max)
-        self.length_x, self.length_y = 20 * self.lambda_min, 20 * self.lambda_min  # size of simulation is 50 wavelengths
+        self.length_x, self.length_y = 30 * self.lambda_min, 30 * self.lambda_min  # size of simulation is 50 wavelengths
         self.ds = self.lambda_min / self.points_per_wavelength
         self.dt = min(self.ds * self.stability / C, math.pi / self.omega_max)  # mesh stability and Nyquist criterion
         self.size = int(self.length_x / self.ds)
@@ -66,12 +67,12 @@ class Solver:
         self.eps_arr = (np.ones((self.size, self.size)) * EPSILON)
         self.mu_arr = (np.ones((self.size, self.size)) * MU)
 
-    def add_material_square(self, upper_left, lower_right, epsilon_rel=1, mu_rel=1):
-        # adding square material in top right by default for now
-        self.eps_arr[upper_left[0]:lower_right[0], upper_left[1]:lower_right[1]] = epsilon_rel * EPSILON
-        self.mu_arr[upper_left[0]:lower_right[0], upper_left[1]:lower_right[1]] = mu_rel * MU
+    def set_material_rect(self, upper_left, lower_right, epsilon_rel, mu_rel=1):
+        # sets a rectangle when given upper left and lower right coordinates (inclusive of lower right)
+        self.eps_arr[upper_left[0]:lower_right[0], upper_left[1]:lower_right[1] + 1] = epsilon_rel * EPSILON
+        self.mu_arr[upper_left[0]:lower_right[0], upper_left[1]:lower_right[1] + 1] = mu_rel * MU
 
-    def add_material_convex(self, center: tuple, radius, thickness, epsilon_rel=1, mu_rel=1):
+    def set_material_convex(self, center: tuple, radius, thickness, epsilon_rel, mu_rel=1):
         displacer = radius - (thickness // 2)
         center_i, center_j = center[0], center[1]
 
@@ -86,6 +87,36 @@ class Solver:
                 if i ** 2 + j ** 2 < radius ** 2:
                     self.eps_arr[center_i + i][center_j + j - displacer] = epsilon_rel * EPSILON
                     self.mu_arr[center_i + i][center_j + j - displacer] = mu_rel * MU
+
+    def set_waveguide(self, center, radius, rectangle_length, thickness, epsilon_rel, mu_rel=1):
+        center_i, center_j = center[0], center[1]
+        for i in range(radius):
+            for j in range(radius):
+                if i**2 + j**2 < radius**2:
+                    self.eps_arr[center_i - i][center_j + j] = epsilon_rel * EPSILON
+                    self.mu_arr[center_i - i][center_j + j] = mu_rel * MU
+
+        # left rectangle portion of waveguide
+        self.set_material_rect((center_i - radius, center_j - rectangle_length), center, epsilon_rel=epsilon_rel, mu_rel=mu_rel)
+
+        # down rectangle portion of waveguide
+        self.set_material_rect(center, (center_i + rectangle_length, center_j + radius), epsilon_rel=epsilon_rel, mu_rel=mu_rel)
+
+        self.subtract_waveguide(center, radius - thickness, rectangle_length)
+
+    def subtract_waveguide(self, center, radius, rectangle_length):
+        center_i, center_j = center[0], center[1]
+        for i in range(radius):
+            for j in range(radius):
+                if i ** 2 + j ** 2 < radius ** 2:
+                    self.eps_arr[center_i - i][center_j + j] = EPSILON
+                    self.mu_arr[center_i - i][center_j + j] = MU
+
+        # left rectangle portion of waveguide
+        self.set_material_rect((center_i - radius, center_j - rectangle_length), center, epsilon_rel=1)
+
+        # down rectangle portion of waveguide
+        self.set_material_rect(center, (center_i + rectangle_length, center_j + radius), epsilon_rel=1)
 
     def add_reflect_square(self, upper_left, lower_right):
         self.reflect = True
@@ -360,8 +391,8 @@ def plane_pulse():
     # initiate variables
     sigma_w = 1  # frequency bandwidth
     omega_0 = 3  # central frequency
-    s = 15  # mesh points per wavelength
-    stability = 0.1  # time mesh stability factor
+    s = 8  # mesh points per wavelength
+    stability = 0.2  # time mesh stability factor
 
     # initiate solver with user input variables
     solver = Solver(points_per_wavelength=s, stability=stability, eps_r_max=1, mu_r_max=1, simulation_time=1000)
