@@ -1,8 +1,10 @@
-2D_Solver_Test
+FDTD EM Wave Simulations in 2D
 ==============
 
-## EM Solver in 2D, official version!
-Requires numpy, matplotlib
+A 3rd year project at KCL..
+
+## Requirements
+numpy, matplotlib
 
 ## Usage
 See ```tutorial.py``` for example.
