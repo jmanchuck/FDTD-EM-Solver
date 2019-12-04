@@ -11,7 +11,7 @@ EPSILON = 8.85 * (10 ** (-12))
 
 class Solver:
 
-    def __init__(self, points_per_wavelength, stability, eps_r_max, mu_r_max, simulation_time=1):
+    def __init__(self, points_per_wavelength, stability, eps_r_max, mu_r_max, simulation_size, simulation_time=1):
         self.points_per_wavelength = points_per_wavelength  # mesh points per wavelength
         self.stability = stability  # time mesh stability factor
 
@@ -21,7 +21,7 @@ class Solver:
         # Pulse dependent
         self.omega_max = 0
         self.lambda_min = None
-        self.length_x, self.length_y = None, None  # size of simulation is 50 wavelengths
+        self.length_x, self.length_y = simulation_size, simulation_size  # size of simulation is set
         self.ds = None
         self.dt = None  # mesh stability and Nyquist criterion
 
@@ -40,7 +40,6 @@ class Solver:
         # material properties matrix
         self.eps_arr = None
         self.mu_arr = None
-        self.material = None
 
         # simulation
         self.reflect = False
@@ -51,10 +50,12 @@ class Solver:
     def update_constants(self):
         # Derived constants, calculate from user input but stays constant throughout simulation
         self.lambda_min = math.pi * 2 * C / (self.n_max * self.omega_max)
-        self.length_x, self.length_y = 30 * self.lambda_min, 30 * self.lambda_min  # size of simulation is 50 wavelengths
         self.ds = self.lambda_min / self.points_per_wavelength
         self.dt = min(self.ds * self.stability / C, math.pi / self.omega_max)  # mesh stability and Nyquist criterion
         self.size = int(self.length_x / self.ds)
+
+        print(self.lambda_min, self.ds, self.size)
+        exit()
 
         # Resize matrices
         self.h = np.zeros((self.size, self.size))
