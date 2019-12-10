@@ -37,6 +37,8 @@ class Solver:
         self.ex = None
         self.ey = None
 
+        self.h_list = []
+
         # material properties matrix
         self.eps_arr = None
         self.mu_arr = None
@@ -54,8 +56,7 @@ class Solver:
         self.dt = min(self.ds * self.stability / C, math.pi / self.omega_max)  # mesh stability and Nyquist criterion
         self.size = int(self.length_x / self.ds)
 
-        print(self.lambda_min, self.ds, self.size)
-        exit()
+        print("Smallest wavelength: {}\n Mesh grating size: {} \n Matrix size: {}".format(self.lambda_min, self.ds, self.size))
 
         # Resize matrices
         self.h = np.zeros((self.size, self.size))
@@ -64,12 +65,19 @@ class Solver:
 
         self.steps = self.end_time / self.dt
 
+        print("Number of time steps:", self.steps)
+
         # material properties matrix
         self.eps_arr = (np.ones((self.size, self.size)) * EPSILON)
         self.mu_arr = (np.ones((self.size, self.size)) * MU)
 
+    def convert(self, si_unit):
+        return int((si_unit / self.length_x) * self.size)
+
     def set_material_rect(self, upper_left, lower_right, epsilon_rel, mu_rel=1):
         # sets a rectangle when given upper left and lower right coordinates (inclusive of lower right)
+        upper_left = [self.convert(i) for i in upper_left]
+        lower_right = [self.convert(j) for j in lower_right]
         self.eps_arr[upper_left[0]:lower_right[0], upper_left[1]:lower_right[1] + 1] = epsilon_rel * EPSILON
         self.mu_arr[upper_left[0]:lower_right[0], upper_left[1]:lower_right[1] + 1] = mu_rel * MU
 
@@ -132,6 +140,7 @@ class Solver:
         if 3 * sigma_w + omega_0 > self.omega_max:
             self.omega_max = 3 * sigma_w + omega_0
             self.update_constants()
+        location = [self.convert(i) for i in location]
         new_pulse = Pulse(sigma_w=sigma_w, dt=self.dt, location=location, omega_0=omega_0, start_time=start_time,
                           type="oscillate", direction=direction)
         self.pulses.append(new_pulse)
@@ -140,6 +149,7 @@ class Solver:
         if 3 * sigma_w > self.omega_max:
             self.omega_max = 3 * sigma_w
             self.update_constants()
+        location = [self.convert(i) for i in location]
         new_pulse = Pulse(sigma_w=sigma_w, dt=self.dt, location=location, start_time=start_time, type="gd",
                           direction=direction)
         self.pulses.append(new_pulse)
@@ -240,7 +250,7 @@ class Solver:
 
         plt.show()
 
-    def solve(self):
+    def solve(self, save=False):
 
         # change eps matrix and mu matrix into the form of the constant we use in calculation
         self.eps_arr = (self.dt / self.ds) * (1 / self.eps_arr)
@@ -267,13 +277,18 @@ class Solver:
         fig.colorbar(im, ax=ax1)
 
         def animate(time):
-            if self.step % 20 == 0:
+            if self.step % 100 == 0:
                 fig.suptitle("Time Step = {}".format(self.step))
+                if save:
+                    self.h_list.append(self.h)
             im.set_array(self.update(time))
             return im,
         anim = animation.FuncAnimation(fig, animate, frames=frames, interval=1, blit=False, repeat=False)
 
         plt.show()
+
+        if save:
+            np.save("h_list", self.h_list)
 
 
 # this class should be hidden from the user, user should NOT be able to access this class
