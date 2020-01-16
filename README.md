@@ -27,7 +27,7 @@ A rectangular reflective or refractive object can be added by the following meth
 The upper left and lower right parameters specify an iterable which contains the coordinates of the
 upper left corner and the lower right corner of the rectangle.
 ```python
-solver.add_reflect_square(upper_left= (i1, j1), lower_right=(i2, j2))
+solver.set_reflect_square(upper_left= (i1, j1), lower_right=(i2, j2))
 
 solver.set_material_rect(upper_left= (i3, j3), lower_right=(i4, j4), epsilon_rel, mu_rel)
 ```

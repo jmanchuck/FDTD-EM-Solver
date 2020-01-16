@@ -48,6 +48,12 @@ class Solver:
         self.reflectors = []
         self.boundaries = [False, False, False, False]  # up, down, left, right: True=reflect, False=absorb
         self.pulses = []
+        self.pulses_max = None
+
+        self.save_file_name = None
+        self.save_file = False
+
+        self.data_collectors = []
 
     def update_constants(self):
         # Derived constants, calculate from user input but stays constant throughout simulation
@@ -56,14 +62,14 @@ class Solver:
         self.dt = min(self.ds * self.stability / C, math.pi / self.omega_max)  # mesh stability and Nyquist criterion
         self.size = int(self.length_x / self.ds)
 
-        print("Smallest wavelength: {}\n Mesh grating size: {} \n Matrix size: {}".format(self.lambda_min, self.ds, self.size))
+        print("Smallest wavelength: {}\nMatrix size: {}".format(self.lambda_min, self.ds, self.size))
 
         # Resize matrices
         self.h = np.zeros((self.size, self.size))
         self.ex = np.zeros((self.size + 1, self.size))
         self.ey = np.zeros((self.size, self.size + 1))
 
-        self.steps = self.end_time / self.dt
+        self.steps = int(self.end_time / self.dt)
 
         print("Number of time steps:", self.steps)
 
@@ -74,46 +80,98 @@ class Solver:
     def convert(self, si_unit):
         return int((si_unit / self.length_x) * self.size)
 
-    def set_material_rect(self, upper_left, lower_right, epsilon_rel, mu_rel=1):
+    def set_material_rect(self, upper_left, lower_right, epsilon_rel, mu_rel=1, convert=True):
         # sets a rectangle when given upper left and lower right coordinates (inclusive of lower right)
-        upper_left = [self.convert(i) for i in upper_left]
-        lower_right = [self.convert(j) for j in lower_right]
+        if convert:
+            upper_left = [self.convert(i) for i in upper_left]
+            lower_right = [self.convert(j) for j in lower_right]
+
         self.eps_arr[upper_left[0]:lower_right[0], upper_left[1]:lower_right[1] + 1] = epsilon_rel * EPSILON
         self.mu_arr[upper_left[0]:lower_right[0], upper_left[1]:lower_right[1] + 1] = mu_rel * MU
 
-    def set_material_convex(self, center: tuple, radius, thickness, epsilon_rel, mu_rel=1):
-        displacer = radius - (thickness // 2)
-        center_i, center_j = center[0], center[1]
+    def set_material_convex(self, center: tuple, radius, thickness, epsilon_rel, mu_rel=1, convert=True):
+        """
+        Special note:
+        Increase radius to have a more curved lens, but choose thickness accordingly otherwise it will go
+        out of range.
+
+        In general: larger radius (curvature) requires smaller thickness
+        """
+        if convert:
+            displacer = self.convert(radius - (thickness / 2))
+            center_i, center_j = self.convert(center[0]), self.convert(center[1])
+            radius = self.convert(radius)
+        else:
+            displacer = radius - thickness // 2
+            center_i, center_j = center[0], center[1]
 
         for j in range(-radius, -displacer):
-            for i in range(-radius, 1 + radius):
+            for i in range(-radius, radius):
                 if i ** 2 + j ** 2 < radius ** 2:
                     self.eps_arr[center_i + i][center_j + j + displacer] = epsilon_rel * EPSILON
                     self.mu_arr[center_i + i][center_j + j + displacer] = mu_rel * MU
 
-        for j in range(displacer, radius + 1):
-            for i in range(-radius, 1 + radius):
+        for j in range(displacer, radius):
+            for i in range(-radius, radius):
                 if i ** 2 + j ** 2 < radius ** 2:
                     self.eps_arr[center_i + i][center_j + j - displacer] = epsilon_rel * EPSILON
                     self.mu_arr[center_i + i][center_j + j - displacer] = mu_rel * MU
 
-    def set_waveguide(self, center, radius, rectangle_length, thickness, epsilon_rel, mu_rel=1):
+    def set_fixed_length_waveguide(self, wire_length, thickness, start_point, curved_ratio, epsilon_rel, mu_rel=1):
+        radius = curved_ratio * wire_length / (2 * math.pi)
+        rectangle_length = wire_length * (1 - curved_ratio) / 2
+        circle_center = (start_point[0] + radius + thickness / 2, start_point[1] + rectangle_length - thickness / 2)
+
+        print("Fixed waveguide: radius: {}, rectangle length: {}, circle center: {}".format(radius, rectangle_length, circle_center))
+
+        if self.convert(rectangle_length + radius + thickness // 2) > self.size * 0.9:
+            raise ValueError("waveguide size is too large for region")
+
+        self.set_waveguide(circle_center, radius, rectangle_length, thickness, epsilon_rel, mu_rel)
+
+    def set_quarter_circle(self, center, radius, epsilon_rel, mu_rel=1, thickness=0, convert=True):
         center_i, center_j = center[0], center[1]
+        if convert:
+            center_i, center_j = self.convert(center_i), self.convert(center_j)
+            radius = self.convert(radius)
+            thickness = self.convert(thickness)
         for i in range(radius):
             for j in range(radius):
-                if i**2 + j**2 < radius**2:
-                    self.eps_arr[center_i - i][center_j + j] = epsilon_rel * EPSILON
-                    self.mu_arr[center_i - i][center_j + j] = mu_rel * MU
+                if thickness == 0:
+                    if i ** 2 + j ** 2 < radius ** 2:
+                        self.eps_arr[center_i - i][center_j + j] = epsilon_rel * EPSILON
+                        self.mu_arr[center_i - i][center_j + j] = mu_rel * MU
+                else:
+                    if radius ** 2 > i ** 2 + j ** 2 > (radius - thickness) ** 2:
+                        self.eps_arr[center_i - i][center_j + j] = epsilon_rel * EPSILON
+                        self.mu_arr[center_i - i][center_j + j] = mu_rel * MU
+
+    def set_waveguide(self, center, radius, rectangle_length, thickness, epsilon_rel, mu_rel=1, convert=True):
+
+        center_i, center_j = center[0], center[1]
+
+        if convert:
+            center_i, center_j = self.convert(center_i), self.convert(center_j)
+            center = (center_i, center_j)
+            radius = self.convert(radius)
+            thickness = self.convert(thickness)
+            rectangle_length = self.convert(rectangle_length)
+
+        print(radius, center, rectangle_length, thickness)
+
+        self.set_quarter_circle(center, radius, epsilon_rel, mu_rel, thickness, False)
 
         # left rectangle portion of waveguide
-        self.set_material_rect((center_i - radius, center_j - rectangle_length), center, epsilon_rel=epsilon_rel, mu_rel=mu_rel)
+        # self.set_material_rect((center_i - radius, center_j - rectangle_length),
+        #                        (center_i - (radius - thickness), center_j), epsilon_rel=epsilon_rel, mu_rel=mu_rel,
+        #                        convert=False)
+        #
+        # # down rectangle portion of waveguide
+        # self.set_material_rect((center_i, center_j + (radius - thickness)),
+        #                        (center_i + rectangle_length, center_j + radius), epsilon_rel=epsilon_rel, mu_rel=mu_rel,
+        #                        convert=False)
 
-        # down rectangle portion of waveguide
-        self.set_material_rect(center, (center_i + rectangle_length, center_j + radius), epsilon_rel=epsilon_rel, mu_rel=mu_rel)
-
-        self.subtract_waveguide(center, radius - thickness, rectangle_length)
-
-    def subtract_waveguide(self, center, radius, rectangle_length):
+    def subtract_waveguide(self, center, radius):
         center_i, center_j = center[0], center[1]
         for i in range(radius):
             for j in range(radius):
@@ -121,15 +179,12 @@ class Solver:
                     self.eps_arr[center_i - i][center_j + j] = EPSILON
                     self.mu_arr[center_i - i][center_j + j] = MU
 
-        # left rectangle portion of waveguide
-        self.set_material_rect((center_i - radius, center_j - rectangle_length), center, epsilon_rel=1)
-
-        # down rectangle portion of waveguide
-        self.set_material_rect(center, (center_i + rectangle_length, center_j + radius), epsilon_rel=1)
-
-    def add_reflect_square(self, upper_left, lower_right):
+    def set_reflect_square(self, upper_left, lower_right):
+        upper_left_converted = [self.convert(i) for i in upper_left]
+        lower_right_converted = [self.convert(j) for j in lower_right]
         self.reflect = True
-        reflect_arr = [upper_left[0], lower_right[0], upper_left[1], lower_right[1]]
+        reflect_arr = [upper_left_converted[0], lower_right_converted[0], upper_left_converted[1],
+                       lower_right_converted[1]]
         self.reflectors.append(reflect_arr)
 
     # manually set the boundaries to reflect, on default call it sets all boundaries to be reflective
@@ -153,6 +208,10 @@ class Solver:
         new_pulse = Pulse(sigma_w=sigma_w, dt=self.dt, location=location, start_time=start_time, type="gd",
                           direction=direction)
         self.pulses.append(new_pulse)
+
+    def add_data_collector(self, i_pos, j_pos, matrix):
+        collector = DataCollector(self.convert(i_pos), self.convert(j_pos))
+        self.data_collectors.append(collector)
 
     def ready(self):
         return len(self.pulses) > 0
@@ -183,7 +242,8 @@ class Solver:
                     self.h[:, pulse.col()] = h_prev[:, pulse.col()] + self.mu_arr[:, pulse.col()] * \
                                              ((ex_prev[1:, pulse.col()] - ex_prev[:-1, pulse.col()]) -
                                               (ey_prev[:, 1 + pulse.col()] -
-                                               (ey_prev[:, pulse.col()] + pulse.magnitude(time) * math.sqrt(MU / EPSILON))))
+                                               (ey_prev[:, pulse.col()] + pulse.magnitude(time) * math.sqrt(
+                                                   MU / EPSILON))))
 
                 elif pulse.direction() == "left":
                     self.h[:, pulse.col()] += self.mu_arr[:, pulse.col()] * magnitude
@@ -205,7 +265,7 @@ class Solver:
             if pulse.start_time() < time < pulse.end_time() and not pulse.direction() is None:
                 if pulse.direction() == "right":
                     self.ey[:, pulse.col()] = ey_prev[:, pulse.col()] - self.eps_arr[:, pulse.col()] * (
-                                self.h[:, pulse.col()] - pulse.magnitude(time) - (self.h[:, pulse.col() - 1]))
+                            self.h[:, pulse.col()] - pulse.magnitude(time) - (self.h[:, pulse.col() - 1]))
         #         elif pulse.direction() == "left":
         #             self.ey[:, pulse.col()] += self.eps_arr[:, pulse.col()] * self.h[:, pulse.col()]
         #         elif pulse.direction() == "up":
@@ -238,6 +298,9 @@ class Solver:
                 self.ex[square[0]:square[1], square[2]:square[3]] = 0
                 self.ey[square[0]:square[1], square[2]:square[3]] = 0
 
+        for collector in self.data_collectors:
+            collector.collect(self.h)
+
         self.step += 1
 
         return self.h
@@ -250,7 +313,7 @@ class Solver:
 
         plt.show()
 
-    def solve(self, save=False):
+    def solve(self, realtime=True):
 
         # change eps matrix and mu matrix into the form of the constant we use in calculation
         self.eps_arr = (self.dt / self.ds) * (1 / self.eps_arr)
@@ -262,33 +325,69 @@ class Solver:
             if pulse.maximum() > pulse_max:
                 pulse_max = pulse.maximum()
 
-        print('solver max:', pulse_max)
+        self.pulses_max = pulse_max
+
+        print('Solver max:', pulse_max)
 
         if not self.ready():
             raise Exception('No pulse added')
-        # instantiate animation plotting variables
+
+        # vector of time values
         frames = np.arange(0, self.end_time, self.dt)
-        fig, ax1 = plt.subplots(figsize=(6, 6))
-        im = ax1.imshow(self.h, animated=True, vmax=pulse_max, vmin=-pulse_max, aspect='auto', cmap='seismic')
-        # im = ax1.imshow(self.h, animated=True, aspect='auto', cmap='seismic')
-        ax1.set_aspect('equal', 'box')
-        ax1.xaxis.set_ticks_position('top')
-        ax1.xaxis.set_label_position('top')
-        fig.colorbar(im, ax=ax1)
 
-        def animate(time):
-            if self.step % 100 == 0:
-                fig.suptitle("Time Step = {}".format(self.step))
-                if save:
+        if realtime:
+            # instantiate animation plotting variables
+            fig, ax1 = plt.subplots(figsize=(6, 6))
+            im = ax1.imshow(self.h, animated=True, vmax=pulse_max, vmin=-pulse_max, aspect='auto', cmap='seismic')
+            ax1.set_aspect('equal', 'box')
+            ax1.xaxis.set_ticks_position('top')
+            ax1.xaxis.set_label_position('top')
+            fig.colorbar(im, ax=ax1)
+
+            def animate(time):
+                if self.step % 100 == 0:
+                    fig.suptitle("Time Step = {}".format(self.step))
+                    if self.save_file:
+                        self.h_list.append(self.h)
+                im.set_array(self.update(time))
+                return im,
+
+            anim = animation.FuncAnimation(fig, animate, frames=frames, interval=1, blit=False, repeat=False)
+
+            plt.show()
+
+        if not realtime:
+            for time in frames:
+                self.update(time)
+
+                if self.save_file and self.step % 10 == 0:
                     self.h_list.append(self.h)
-            im.set_array(self.update(time))
-            return im,
-        anim = animation.FuncAnimation(fig, animate, frames=frames, interval=1, blit=False, repeat=False)
 
+        if self.save_file:
+            np.save(self.save_file_name, self.h_list)
+
+    def save(self, file_name):
+        self.save_file_name = file_name
+        self.save_file = True
+
+    def load(self):
+        h_list = np.load(self.save_file_name + ".npy")
+
+        def update(i):
+            mat.set_array(h_list[i])
+
+        fig, ax = plt.subplots()
+        mat = ax.imshow(h_list[0], vmax=self.pulses_max, vmin=-self.pulses_max)
+        plt.colorbar(mat)
+        ani = animation.FuncAnimation(fig, update, frames=len(h_list), interval=150, repeat=False)
         plt.show()
 
-        if save:
-            np.save("h_list", self.h_list)
+
+class MaterialArray:
+
+    def __init__(self, size):
+        self.eps_arr = np.ones(size, size) * EPSILON
+        self.mu_arr = np.ones(size, size) * EPSILON
 
 
 # this class should be hidden from the user, user should NOT be able to access this class
@@ -398,9 +497,42 @@ class Pulse:
             plt.plot(envelope)
         plt.show()
 
+class DataCollector:
 
-# improvements:
-# - user inputs real time simulation length in seconds, use dt to calculate how many steps
+    def __init__(self, i_pos, j_pos):
+        self.i_pos = i_pos
+        self.j_pos = j_pos
+        self.data = []
+        self.time_axis = None
+
+    def collect(self, matrix):
+        self.data.append(matrix[self.i_pos][self.j_pos])
+
+    def plot(self):
+        fig, ax = plt.subplots()
+        plt.plot(self.data)
+        plt.show()
+
+    def fft(self):
+        fft_values = np.fft.fft(self.data)
+        freqs = np.fft.fftfreq(len(self.data))
+        mask = freqs > 0
+        plt.plot(freqs[mask], fft_values[mask])
+        plt.xlim([0, 0.1])
+        plt.show()
+
+
+def load_file(file_name):
+    h_list = np.load(file_name)
+
+    def update(i):
+        mat.set_array(h_list[i])
+
+    fig, ax = plt.subplots()
+    mat = ax.imshow(h_list[0], vmax=np.max(h_list), vmin=np.min(h_list))
+    plt.colorbar(mat)
+    ani = animation.FuncAnimation(fig, update, frames=len(h_list), interval=150, repeat=False)
+    plt.show()
 
 
 def plane_pulse():
@@ -424,25 +556,6 @@ def plane_pulse():
     solver.solve()
 
 
-def point_pulse():
-    # EXAMPLE INPUTS
-    sigma_w = 1  # frequency bandwidth
-    omega_0 = 5  # central frequency
-    s = 15  # mesh points per wavelength
-    stability = 0.1  # time mesh stability factor
-    solver = Solver(points_per_wavelength=s, stability=stability, eps_r_max=1, mu_r_max=1, simulation_time=400)
-    solver.set_reflect_boundaries()
-    solver.add_gaussian_pulse(5, (150, 150), start_time=1)
-    solver.add_oscillating_pulse(sigma_w, (20, 20), omega_0=20)
-    solver.add_oscillating_pulse(sigma_w, (80, 80), omega_0=6, start_time=1)
-    solver.add_oscillating_pulse(sigma_w, (230, 230), omega_0=5, start_time=1)
-    solver.add_oscillating_pulse(sigma_w, (20, 230), omega_0=8, start_time=2)
-    solver.add_oscillating_pulse(sigma_w, (230, 30), omega_0=14, start_time=2)
-    print('pulses max:', max)
-    solver.solve()
-
-
 if __name__ == '__main__':
     plane_pulse()
-    # point_pulse()
     exit()

@@ -46,11 +46,15 @@ def draw_quarter_circle(center, radius, rectangle_length, magnitude):
     draw_rect(center, (center_i + rectangle_length, center_j + radius), magnitude)
 
 
-draw_lens((len(matrix)//4, len(matrix)//4), 200, 50, magnitude=1)
-draw_rect((10, 10), (80, 50), magnitude=1)
-draw_quarter_circle((len(matrix)//2, len(matrix)//2), 50, rectangle_length=100, magnitude=1)
-draw_quarter_circle((len(matrix)//2, len(matrix)//2), 20, rectangle_length=100, magnitude=-1)
+def draw_fixed_waveguide(length, thickness, start, curved_ratio):
+    radius = int(curved_ratio * length / (2 * math.pi))
+    rectangle_length = int(length * (1 - curved_ratio) / 2)
+    circle_center = (start[0] + rectangle_length, start[1] + rectangle_length)
 
+    draw_quarter_circle(center=circle_center, radius=radius, rectangle_length=rectangle_length, magnitude=1)
+
+draw_rect((10, 10), (80, 50), magnitude=1)
+draw_fixed_waveguide(800, 0, (200, 200), 0.8)
 
 def main():
     fig, ax = plt.subplots()
