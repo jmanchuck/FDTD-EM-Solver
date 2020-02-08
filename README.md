@@ -9,8 +9,6 @@ numpy, matplotlib
 ## Usage
 See ```tutorial.py``` for example.
 
-// TODO
-
 ### Optional:
 These can be called before using the ```solve()``` method. 
 
@@ -21,19 +19,27 @@ Note that calling the function without arguments will set all walls to reflectiv
 solver.set_reflect_boundaries(up=True, down=True, left=False, right=False)
 ```
 
-#### Adding materials
-A rectangular reflective or refractive object can be added by the following methods.
-
+#### Editing material
 The upper left and lower right parameters specify an iterable which contains the coordinates of the
 upper left corner and the lower right corner of the rectangle.
-```python
-solver.set_reflect_square(upper_left= (i1, j1), lower_right=(i2, j2))
 
-solver.set_material_rect(upper_left= (i3, j3), lower_right=(i4, j4), epsilon_rel, mu_rel)
+After adding all pulses, user can create material matrix (the matrix containing permittivity and permeability values):
+```python
+material = solver.create_material()
+```
+This object has methods that allows adding different shaped materials. For example:
+```python
+material.set_material_rect(upper_left= (x1, y1), lower_right=(x2, y2))
+material.set_material_convex(centre=(1.5, 1.5), radius=2, thickness=1, epsilon_rel=5)
+```
+A plot of the materials can be shown using the following method:
+```python
+material.plot()
 ```
 
 ## TODO
 
-* Save images as gif functionality
-* Save h matrix as npy file
+* Add load file class
+* Fix waveguide 
+* Check FFT 
 

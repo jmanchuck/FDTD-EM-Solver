@@ -1,4 +1,4 @@
-from user_solver import Solver
+from solver import Solver
 
 # initiate variables
 sigma_w = 1 * 10 ** 9  # frequency bandwidth
@@ -11,8 +11,11 @@ solver = Solver(points_per_wavelength=s, stability=stability, eps_r_max=4, mu_r_
 
 solver.add_oscillating_pulse(sigma_w, (2.5, 0.1), omega_0, direction="right")
 
+material = solver.create_material()
 solver.set_reflect_square((0, 0.5), (0.85, 0.51))
 solver.set_reflect_square((0.95, 0.5), (1.05, 0.51))
 solver.set_reflect_square((1.15, 0.5), (5, 0.51))
 
-solver.solve(realtime=True)
+solver.save("double_slit")
+solver.solve(realtime=False)
+solver.load()
