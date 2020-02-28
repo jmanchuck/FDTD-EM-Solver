@@ -7,7 +7,7 @@ fileLoad = FileLoader("double_slit")
 
 data_collectors = []
 
-get_freqs = False
+got_frequencies = False
 frequency_x = None
 
 for i in range(len(fileLoad.get_matrix()[0])):
@@ -15,9 +15,9 @@ for i in range(len(fileLoad.get_matrix()[0])):
     data.collect_all()
     data.fft()
 
-    if not get_freqs:
+    if not got_frequencies:
         frequency_x = data.fft_frequencies
-        get_freqs = True
+        got_frequencies = True
 
     data_collectors.append(data.fft_amplitude)
 
