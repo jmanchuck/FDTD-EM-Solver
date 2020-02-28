@@ -1,3 +1,5 @@
 *.npy
-*.idea
 *.pyc
+*.xml
+*.iml
+
