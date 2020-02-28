@@ -2,6 +2,8 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from analyser import DataCollector
+import time
 
 # Physical constants
 C = 2.99 * (10 ** 8)
@@ -117,10 +119,6 @@ class Solver:
         new_pulse = Pulse(sigma_w=sigma_w, dt=self.dt, location=location, start_time=start_time, type="gd",
                           direction=direction)
         self.pulses.append(new_pulse)
-
-    def add_data_collector(self, i_pos, j_pos):
-        collector = DataCollector(self.convert(i_pos), self.convert(j_pos))
-        self.data_collectors.append(collector)
 
     def ready(self):
         return len(self.pulses) > 0
@@ -266,25 +264,12 @@ class Solver:
     def plot_and_save(self, frames):
         for time in frames:
             self.update(time)
-
-            if self.save_file and self.step % 10 == 0:
+            if self.step % 20 == 0 and self.save_file:
                 self.h_list.append(self.h)
 
     def save(self, file_name):
         self.save_file_name = file_name
         self.save_file = True
-
-    def load(self):
-        h_list = np.load(self.save_file_name + ".npy")
-
-        def animate(i):
-            matrix.set_array(h_list[i])
-
-        fig, ax = plt.subplots()
-        matrix = ax.imshow(h_list[0], vmax=self.pulses_max, vmin=-self.pulses_max)
-        plt.colorbar(matrix)
-        ani = animation.FuncAnimation(fig, animate, frames=len(h_list), interval=150, repeat=False)
-        plt.show()
 
 
 class MaterialArray:
@@ -338,18 +323,12 @@ class MaterialArray:
                     self.eps_arr[center_i + i][center_j + j - displacer] = epsilon_rel * EPSILON
                     self.mu_arr[center_i + i][center_j + j - displacer] = mu_rel * MU
 
-    def set_fixed_length_waveguide(self, wire_length, thickness, start_point, curved_ratio, epsilon_rel, mu_rel=1):
-        radius = curved_ratio * wire_length / (2 * math.pi)
-        rectangle_length = wire_length * (1 - curved_ratio) / 2
-        circle_center = (start_point[0] + radius + thickness / 2, start_point[1] + rectangle_length - thickness / 2)
-
-        print("Fixed waveguide: radius: {}, rectangle length: {}, circle center: {}".format(radius, rectangle_length,
-                                                                                            circle_center))
-
-        if self.convert(rectangle_length + radius + thickness // 2) > self.size * 0.9:
-            raise ValueError("waveguide size is too large for region")
-
-        self.set_waveguide(circle_center, radius, rectangle_length, thickness, epsilon_rel, mu_rel)
+    def set_fixed_length_waveguide(self, upper_left, waveguide_length, curved_portion_ratio, thickness, epsilon_rel,
+                                   mu_rel=1):
+        rect_length = (waveguide_length * (1 - curved_portion_ratio)) / 2
+        radius = curved_portion_ratio * waveguide_length / (math.pi / 2)
+        self.set_waveguide(upper_left, thickness, rect_length, radius + thickness / 2, epsilon_rel, mu_rel=mu_rel,
+                     convert=True)
 
     def set_quarter_circle(self, center, radius, epsilon_rel, mu_rel=1, thickness=0, convert=True):
         center_i, center_j = center[0], center[1]
@@ -368,38 +347,24 @@ class MaterialArray:
                         self.eps_arr[center_i - i][center_j + j] = epsilon_rel * EPSILON
                         self.mu_arr[center_i - i][center_j + j] = mu_rel * MU
 
-    def set_waveguide(self, center, radius, rectangle_length, thickness, epsilon_rel, mu_rel=1, convert=True):
+    def set_waveguide(self, start_point, thickness, rect_length, radius, epsilon_rel, mu_rel=1, convert=True):
 
-        center_i, center_j = center[0], center[1]
-
+        start_i = start_point[0]
+        start_j = start_point[1]
         if convert:
-            center_i, center_j = self.convert(center_i), self.convert(center_j)
-            center = (center_i, center_j)
-            radius = self.convert(radius)
+            start_i = self.convert(start_i)
+            start_j = self.convert(start_j)
             thickness = self.convert(thickness)
-            rectangle_length = self.convert(rectangle_length)
+            rect_length = self.convert(rect_length)
+            radius = self.convert(radius)
 
-        print(radius, center, rectangle_length, thickness)
+        self.set_material_rect((start_i, start_j), (start_i + thickness, start_j + rect_length), epsilon_rel, mu_rel=mu_rel, convert=False)
 
-        self.set_quarter_circle(center, radius, epsilon_rel, mu_rel, thickness, False)
+        quarter_circle_center = (start_i + radius, start_j + rect_length)
+        self.set_quarter_circle(quarter_circle_center, radius, epsilon_rel, thickness=thickness, mu_rel=mu_rel, convert=False)
 
-        # left rectangle portion of waveguide
-        # self.set_material_rect((center_i - radius, center_j - rectangle_length),
-        #                        (center_i - (radius - thickness), center_j), epsilon_rel=epsilon_rel, mu_rel=mu_rel,
-        #                        convert=False)
-        #
-        # # down rectangle portion of waveguide
-        # self.set_material_rect((center_i, center_j + (radius - thickness)),
-        #                        (center_i + rectangle_length, center_j + radius), epsilon_rel=epsilon_rel, mu_rel=mu_rel,
-        #                        convert=False)
-
-    def subtract_waveguide(self, center, radius):
-        center_i, center_j = center[0], center[1]
-        for i in range(radius):
-            for j in range(radius):
-                if i ** 2 + j ** 2 < radius ** 2:
-                    self.eps_arr[center_i - i][center_j + j] = EPSILON
-                    self.mu_arr[center_i - i][center_j + j] = MU
+        down_rect_start = (quarter_circle_center[0], quarter_circle_center[1] + radius - thickness)
+        self.set_material_rect(down_rect_start, (down_rect_start[0] + rect_length, down_rect_start[1] + thickness), epsilon_rel, mu_rel=mu_rel, convert=False)
 
     def plot(self):
         fig, ax = plt.subplots()
@@ -462,6 +427,8 @@ class Pulse:
             elif self._type == "oscillate":
                 new = math.cos(t * self.omega_0) * (1 / (self.sigma_t * math.sqrt(2 * math.pi))) * (
                     math.exp(-((t - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
+            else:
+                raise Exception("Invalid pulse")
 
             # if turning point found
             if new > biggest:
@@ -493,7 +460,6 @@ class Pulse:
         plt.show()
 
     ### GET METHODS ###
-
     def get_maximum(self):
         return self._maximum
 
@@ -522,54 +488,6 @@ class Pulse:
         return self._type
 
 
-class DataCollector:
-
-    """
-    This is the Data Collector. What does it do?
-
-    You can collect data from ANY of the 3 matrices (Ex, Ey or Hz) at 1 specific location (specific index).
-    This object is accessed from the solver part of the code and automatically checks if you've added
-    Data Collectors. You can add them using the method under solver: add_data_collector.
-
-    Iterate through the list of Data Collectors in the solver to see plots of your data or fourier transforms of it.
-    """
-
-    def __init__(self, i_pos, j_pos):
-        self.i_pos = i_pos
-        self.j_pos = j_pos
-        self.data = []
-        self.time_axis = None
-
-    def collect(self, matrix):
-        self.data.append(matrix[self.i_pos][self.j_pos])
-
-    def plot(self):
-        fig, ax = plt.subplots()
-        plt.plot(self.data)
-        plt.show()
-
-    def fft(self):
-        fft_values = np.fft.fft(self.data)
-        freqs = np.fft.fftfreq(len(self.data))
-        mask = freqs > 0
-        plt.plot(freqs[mask], fft_values[mask])
-        plt.xlim([0, 0.1])
-        plt.show()
-
-
-def load_file(file_name, interval=100):
-    h_list = np.load(file_name)
-
-    def update(i):
-        mat.set_array(h_list[i])
-
-    fig, ax = plt.subplots()
-    mat = ax.imshow(h_list[0], vmax=np.max(h_list), vmin=np.min(h_list))
-    plt.colorbar(mat)
-    ani = animation.FuncAnimation(fig, update, frames=len(h_list), interval=interval, repeat=False)
-    plt.show()
-
-
 def test():
     # initiate variables
     sigma_w = 1 * 10 ** 9  # frequency bandwidth
@@ -592,7 +510,13 @@ def test():
 
     mat.plot()
 
-    # solver.solve(realtime=True)
+    exit()
+
+    # solver.save('main_codetest')
+
+    start_time = time.time()
+    solver.solve(realtime=False)
+    print("Time taken: ", time.time() - start_time)
 
 if __name__ == '__main__':
     test()

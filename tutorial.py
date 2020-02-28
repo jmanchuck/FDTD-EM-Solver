@@ -1,4 +1,5 @@
-from solver import Solver, load_file
+from solver import Solver
+from analyser import FileLoader, DataCollector
 
 # initiate variables
 sigma_w = 1 * 10 ** 9  # frequency bandwidth
@@ -20,10 +21,6 @@ material = solver.create_material()
 solver.set_reflect_square((0.98, 0.8), (solver.size, 1))
 
 # OPTIONAL
-solver.add_data_collector(0.82, 0.95,)
-solver.add_data_collector(1.9, 2.13)
-
-# OPTIONAL
 material.set_fixed_length_waveguide(wire_length=5, thickness=0.1, start_point=(0.2, 1.5), curved_ratio=1, epsilon_rel=4)
 material.plot()
 
@@ -32,15 +29,11 @@ material.plot()
 solver.set_reflect_boundaries(up=False, down=False, left=False, right=False)
 
 # If you wish to save as an npy file, uncomment below and use solver.load() at the end to see simulation (recommended)
-# solver.save('test')
+# name = 'test'
+# solver.save(name)
 
 # If you wish to see the simulation...
 solver.solve()
 
 # Use this if you have used solver.save
-# solver.load()
-
-# Work in progress
-# for collector in solver.data_collectors:
-#     collector.plot()
-#     collector.fft()
+# file_loader = FileLoader(name)

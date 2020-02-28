@@ -7,10 +7,7 @@ A 3rd year project at KCL..
 numpy, matplotlib
 
 ## Usage
-See ```tutorial.py``` for example.
-
-### Optional:
-These can be called before using the ```solve()``` method. 
+See ```tutorial.py``` for full example.
 
 #### Changing boundary properties
 Change boundaries of simulation to reflective walls (default walls absorb).  
@@ -39,7 +36,4 @@ material.plot()
 
 ## TODO
 
-* Add load file class
 * Fix waveguide 
-* Check FFT 
-
