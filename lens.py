@@ -1,4 +1,5 @@
 from solver import Solver
+from analyser import FileLoader
 
 # initiate variables
 sigma_w = 1 * 10 ** 9  # frequency bandwidth
@@ -15,4 +16,6 @@ solver.set_reflect_boundaries(up=True, down=True)
 
 solver.save('lens')
 solver.solve(realtime=False)
-solver.load()
+
+fileloader = FileLoader('lens')
+fileloader.play()
