@@ -82,7 +82,7 @@ class DataCollector:
 
 def test():
 
-    loaded = FileLoader("main_codetest")
+    loaded = FileLoader("double_slit")
     data = DataCollector(loaded.get_matrix(), 200, 200)
     data.collect_all()
     data.plot_time()

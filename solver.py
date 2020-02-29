@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from analyser import DataCollector
 import time
+import sys
 
 # Physical constants
 C = 2.99 * (10 ** 8)
@@ -68,7 +69,7 @@ class Solver:
         self.dt = min(self.ds * self.stability / C, math.pi / self.omega_max)  # mesh stability and Nyquist criterion
         self.size = int(self.length_x / self.ds)
 
-        print("Smallest wavelength: {}\nMatrix size: {}".format(self.lambda_min, self.ds, self.size))
+        print("Smallest wavelength: {}\nMatrix size: {}".format(self.lambda_min, self.size))
 
         # Resize matrices
         self.h = np.zeros((self.size, self.size))
@@ -110,6 +111,8 @@ class Solver:
         new_pulse = Pulse(sigma_w=sigma_w, dt=self.dt, location=location, omega_0=omega_0, start_time=start_time,
                           type="oscillate", direction=direction)
         self.pulses.append(new_pulse)
+
+        return new_pulse
 
     def add_gaussian_pulse(self, sigma_w, location, start_time=0, direction=None):
         if 3 * sigma_w > self.omega_max:
@@ -218,7 +221,7 @@ class Solver:
 
         print('Solver max:', pulse_max)
 
-    def solve(self, realtime=True):
+    def solve(self, realtime=True, loading_bar=True):
 
         if not self.ready():
             raise Exception('No pulse added')
@@ -235,7 +238,7 @@ class Solver:
             self.plot_and_show(frames)
 
         if not realtime:
-            self.plot_and_save(frames)
+            self.plot_and_save(frames, loading_bar)
 
         if self.save_file:
             np.save(self.save_file_name, self.h_list)
@@ -250,7 +253,7 @@ class Solver:
         fig.colorbar(im, ax=ax1)
 
         def animate(time):
-            if self.step % 100 == 0:
+            if self.step % 200 == 0:
                 fig.suptitle("Time Step = {}".format(self.step))
                 if self.save_file:
                     self.h_list.append(self.h)
@@ -261,10 +264,13 @@ class Solver:
 
         plt.show()
 
-    def plot_and_save(self, frames):
+    def plot_and_save(self, frames, loading_bar=True):
         for time in frames:
             self.update(time)
-            if self.step % 20 == 0 and self.save_file:
+            if loading_bar:
+                sys.stdout.write("\r%d%%" % (100 * self.step // self.steps))
+                sys.stdout.flush()
+            if self.step % 5 == 0 and self.save_file:
                 self.h_list.append(self.h)
 
     def save(self, file_name):
