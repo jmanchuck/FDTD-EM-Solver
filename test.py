@@ -3,25 +3,38 @@
 from solver import Solver
 from analyser import FileLoader
 
-sigma_w = 10 * 10 ** 9  # frequency bandwidth
-omega_0 = 10 * 10 ** 9  # central frequency
+from analyser import FileLoader
+import json
+
+# initiate variables
+sigma_w = 1 * 10 ** 9  # frequency bandwidth
+omega_0 = 5 * 10 ** 9  # central frequency
 
 print(2.99 * (10 ** 8) / omega_0)
 s = 10  # mesh points per wavelength
 stability = 0.2  # time mesh stability factor
 
+# initiate solver with user input variables
 solver = Solver(points_per_wavelength=s, stability=stability, eps_r_max=4, mu_r_max=1, simulation_size=3,
                 simulation_time=2.5 * 10 ** (-8))
 
-solver.add_oscillating_pulse(sigma_w, (0.1, 0.05), omega_0)
+# add pulses (a pulse must be added to run the simulation)
+solver.add_oscillating_pulse(sigma_w, (0.8, 0.4), omega_0)  # this adds a point pulse
 
-for pulse in solver.pulses:
-    pulse.plot()
-# mat = solver.create_material()
-# mat.plot()
-#
-# solver.save("test")
+mat = solver.create_material()
+
+mat.set_material_rect((2, 2), (2.8, 2.8), 3)
+
+# solver.save('test_json')
 # solver.solve(realtime=False)
-#
-# fileloader = FileLoader('test')
-# fileloader.play()
+
+fileLoad = FileLoader('test_json')
+fileLoad.play()
+
+exit()
+with open ('test_json.txt') as json_file:
+    data = json.load(json_file)
+
+print(data)
+
+print(data['end_time'] / data['dt'])

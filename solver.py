@@ -2,9 +2,10 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-from analyser import DataCollector
+from analyser import DataCollector, FileLoader
 import time
 import sys
+import json
 
 # Physical constants
 C = 2.99 * (10 ** 8)
@@ -58,9 +59,30 @@ class Solver:
         # save file
         self.save_file_name = None
         self.save_file = False
+        self.save_dict_json = dict()
+        self.step_frequency = None
 
-        # list of data collector objects
-        self.data_collectors = []
+    def save_to_json(self):
+        self.save_dict_json['dt'] = self.dt
+        self.save_dict_json['ds'] = self.ds
+        self.save_dict_json['length_x'] = self.length_x
+        self.save_dict_json['length_y'] = self.length_y
+        self.save_dict_json['stability'] = self.stability
+
+        self.save_dict_json['end_time'] = self.end_time
+        self.save_dict_json['step_frequency'] = self.step_frequency
+
+        self.save_dict_json['pulses'] = []
+        for pulse in self.pulses:
+            self.save_dict_json['pulses'].append({
+                'sigma_w': pulse.sigma_w,
+                'omega_0': pulse.omega_0,
+                'row': pulse.get_row(),
+                'col': pulse.get_col()
+            })
+
+        with open(self.save_file_name + '.txt', 'w') as outfile:
+            json.dump(self.save_dict_json, outfile)
 
     def update_constants(self):
         # Derived constants, calculate from user input but stays constant throughout simulation
@@ -79,10 +101,6 @@ class Solver:
         self.steps = int(self.end_time / self.dt)
 
         print("Number of time steps:", self.steps)
-
-        # material properties matrix
-        self.eps_arr = (np.ones((self.size, self.size)) * EPSILON)
-        self.mu_arr = (np.ones((self.size, self.size)) * MU)
 
     def convert(self, si_unit):
         return int((si_unit / self.length_x) * self.size)
@@ -202,9 +220,6 @@ class Solver:
                 self.ex[square[0]:square[1], square[2]:square[3]] = 0
                 self.ey[square[0]:square[1], square[2]:square[3]] = 0
 
-        for collector in self.data_collectors:
-            collector.collect(self.h)
-
         self.step += 1
 
         return self.h
@@ -221,7 +236,7 @@ class Solver:
 
         print('Solver max:', pulse_max)
 
-    def solve(self, realtime=True, loading_bar=True):
+    def solve(self, realtime=True, loading_bar=True, step_frequency=5):
 
         if not self.ready():
             raise Exception('No pulse added')
@@ -234,14 +249,17 @@ class Solver:
         # vector of time values
         frames = np.arange(0, self.end_time, self.dt)
 
+        self.step_frequency = step_frequency
+
         if realtime:
             self.plot_and_show(frames)
 
         if not realtime:
-            self.plot_and_save(frames, loading_bar)
+            self.plot_and_save(frames, step_frequency=5)
 
         if self.save_file:
             np.save(self.save_file_name, self.h_list)
+            self.save_to_json()
 
     def plot_and_show(self, frames):
         # instantiate animation plotting variables
@@ -264,13 +282,13 @@ class Solver:
 
         plt.show()
 
-    def plot_and_save(self, frames, loading_bar=True):
+    def plot_and_save(self, frames, step_frequency, loading_bar=True):
         for time in frames:
             self.update(time)
             if loading_bar:
                 sys.stdout.write("\r%d%%" % (100 * self.step // self.steps))
                 sys.stdout.flush()
-            if self.step % 5 == 0 and self.save_file:
+            if self.step % step_frequency == 0 and self.save_file:
                 self.h_list.append(self.h)
 
     def save(self, file_name):
@@ -465,7 +483,6 @@ class Pulse:
             plt.plot(envelope)
         plt.show()
 
-    ### GET METHODS ###
     def get_maximum(self):
         return self._maximum
 
@@ -516,13 +533,11 @@ def test():
 
     mat.plot()
 
-    exit()
-
-    # solver.save('main_codetest')
-
-    start_time = time.time()
+    solver.save('test_json')
     solver.solve(realtime=False)
-    print("Time taken: ", time.time() - start_time)
+
+    fileLoad = FileLoader('test_json')
+    fileLoad.play()
 
 if __name__ == '__main__':
     test()
