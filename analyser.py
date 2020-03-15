@@ -8,20 +8,22 @@ class FileLoader:
 
     def __init__(self, file_name):
         self.file_name = file_name
-        self.data_properties = None
+        self.constants = None
         self.h_matrix = None
         self.load()
 
     def load(self):
         self.h_matrix = np.load(self.file_name + ".npy")
-        with open(self.file_name + ".txt") as json_file:
-            self.data_properties = json.load(json_file)
+        try:
+            with open(self.file_name + ".txt") as json_file:
+                self.constants = json.load(json_file)
+        except FileNotFoundError:
+            print("Properties of simulation not present, run again to save simulation properties")
 
     def play(self, interval=100, colourdepth=0.8):
-
+        # plt.figure()
         darkness_factor = 1 - colourdepth
         fig, ax = plt.subplots()
-
 
         def animate(i):
             matrix.set_array(self.h_matrix[i])
@@ -30,6 +32,16 @@ class FileLoader:
         matrix = ax.imshow(self.h_matrix[0], vmax=darkness_factor*np.max(self.h_matrix), vmin=-darkness_factor*np.max(self.h_matrix), cmap='seismic')
         plt.colorbar(matrix)
         ani = animation.FuncAnimation(fig, animate, frames=len(self.h_matrix), interval=interval, repeat=False)
+        plt.show()
+
+    def plot_at_time_step(self, time_step):
+        plt.figure()
+
+        im = plt.imshow(self.h_matrix[time_step], vmax = np.max(self.h_matrix), vmin=-np.max(self.h_matrix),  extent=[0, 4, 4, 0], cmap='seismic')
+        plt.colorbar(im)
+        plt.suptitle(self.file_name)
+        plt.ylabel("Y (m)")
+        plt.xlabel("X (m)")
         plt.show()
 
     def get_matrix(self):
@@ -48,10 +60,17 @@ class DataCollector:
     Iterate through the list of Data Collectors in the solver to see plots of your data or fourier transforms of it.
     """
 
-    def __init__(self, matrix, i_pos, j_pos):
+    def __init__(self, matrix, i_pos, j_pos, dt, end_time, step_freq):
         self.matrix = matrix
         self.i_pos = i_pos
         self.j_pos = j_pos
+
+        self.dt = dt
+        self.end_time = end_time
+        self.step_freq = step_freq
+
+        self.time_vector = np.arange(0, self.end_time, self.step_freq * self.dt)
+
         self.data = []
 
         # fast fourier transform plots
@@ -65,9 +84,10 @@ class DataCollector:
         self.data = self.matrix[:, self.i_pos, self.j_pos]
 
     def plot_time(self):
-        # fig, ax = plt.subplots()
-        plt.plot(self.data)
-        plt.show()
+        plt.suptitle("Detected pulse")
+        plt.xlabel("Time (seconds)")
+        plt.ylabel("Magnitude")
+        plt.plot(self.time_vector, self.data)
 
     def fft(self):
         self.fft_frequencies = np.fft.fftfreq(len(self.data))
@@ -79,7 +99,6 @@ class DataCollector:
     def plot_frequency(self):
         self.fft()
         plt.plot(self.fft_frequencies, self.fft_amplitude)
-        plt.show()
 
     def get_data(self):
         return self.data
@@ -93,6 +112,7 @@ def test():
     data.plot_time()
     data.plot_frequency()
 
+    loaded.play(interval=5)
 
 if __name__ == "__main__":
     test()

@@ -77,6 +77,7 @@ class Solver:
             self.save_dict_json['pulses'].append({
                 'sigma_w': pulse.sigma_w,
                 'omega_0': pulse.omega_0,
+                'omega_max': pulse.get_omega_max(),
                 'row': pulse.get_row(),
                 'col': pulse.get_col()
             })
@@ -123,6 +124,7 @@ class Solver:
 
     def add_oscillating_pulse(self, sigma_w, location, omega_0, start_time=0, direction=None):
         if 3 * sigma_w + omega_0 > self.omega_max:
+            print(3 * sigma_w + omega_0, self.omega_max)
             self.omega_max = 3 * sigma_w + omega_0
             self.update_constants()
         location = [self.convert(i) for i in location]
@@ -141,6 +143,8 @@ class Solver:
                           direction=direction)
         self.pulses.append(new_pulse)
 
+        return new_pulse
+
     def ready(self):
         return len(self.pulses) > 0
 
@@ -158,7 +162,7 @@ class Solver:
         # override h field for pulse
         for pulse in self.pulses:
             if pulse.get_start_time() < time < pulse.get_end_time():
-                magnitude = pulse.magnitude(time)
+                magnitude = pulse.magnitude(self.step)
                 if pulse.get_direction() is None:
                     self.h[pulse.get_row()][pulse.get_col()] = magnitude
 
@@ -170,7 +174,7 @@ class Solver:
                     self.h[:, pulse.get_col()] = h_prev[:, pulse.get_col()] + self.mu_coefficient_arr[:, pulse.get_col()] * \
                                                  ((ex_prev[1:, pulse.get_col()] - ex_prev[:-1, pulse.get_col()]) -
                                                   (ey_prev[:, 1 + pulse.get_col()] -
-                                                   (ey_prev[:, pulse.get_col()] + pulse.magnitude(time) * math.sqrt(
+                                                   (ey_prev[:, pulse.get_col()] + pulse.magnitude(self.step) * math.sqrt(
                                                    MU / EPSILON))))
 
                 elif pulse.get_direction() == "left":
@@ -193,7 +197,7 @@ class Solver:
             if pulse.get_start_time() < time < pulse.get_end_time() and not pulse.get_direction() is None:
                 if pulse.get_direction() == "right":
                     self.ey[:, pulse.get_col()] = ey_prev[:, pulse.get_col()] - self.eps_coefficient_arr[:, pulse.get_col()] * (
-                            self.h[:, pulse.get_col()] - pulse.magnitude(time) - (self.h[:, pulse.get_col() - 1]))
+                            self.h[:, pulse.get_col()] - pulse.magnitude(self.step) - (self.h[:, pulse.get_col() - 1]))
 
         # if the boundary is NOT reflective, apply absorb equation, order is up, down, left and right borders
         if not self.boundaries[0]:
@@ -227,10 +231,10 @@ class Solver:
     def assign_pulse_max(self):
 
         # get the maximum of all pulses
-        pulse_max = self.pulses[0].get_maximum()
+        pulse_max = self.pulses[0].pulse_maxima()
         for pulse in self.pulses:
-            if pulse.get_maximum() > pulse_max:
-                pulse_max = pulse.get_maximum()
+            if pulse.pulse_maxima() > pulse_max:
+                pulse_max = pulse.pulse_maxima()
 
         self.pulses_max = pulse_max
 
@@ -251,15 +255,16 @@ class Solver:
 
         self.step_frequency = step_frequency
 
-        if realtime:
+        if realtime and not self.save_file:
             self.plot_and_show(frames)
 
-        if not realtime:
-            self.plot_and_save(frames, step_frequency=5)
-
-        if self.save_file:
-            np.save(self.save_file_name, self.h_list)
-            self.save_to_json()
+        else:
+            if not self.save_file:
+                raise Exception("Must create a save file name for non-realtime simulation")
+            else:
+                self.plot_and_save(frames, step_frequency=5)
+                np.save(self.save_file_name, self.h_list)
+                self.save_to_json()
 
     def plot_and_show(self, frames):
         # instantiate animation plotting variables
@@ -271,7 +276,7 @@ class Solver:
         fig.colorbar(im, ax=ax1)
 
         def animate(time):
-            if self.step % 200 == 0:
+            if self.step % 20 == 0:
                 fig.suptitle("Time Step = {}".format(self.step))
                 if self.save_file:
                     self.h_list.append(self.h)
@@ -410,14 +415,19 @@ class Pulse:
         self.omega_0 = omega_0
         self.dt = dt
         self.pulseMid = 3 * self.sigma_t  # the middle of the pulse (approximately 3 standard deviations)
+        self._magnitude_vector = None
         self._start_time = start_time
         self._end_time = self._start_time + self.pulseMid * 8
         self._location = location
         self._type = type
-        self._maximum = self.calculate_max()
+        self._maximum = self.pulse_maxima()
         self._omega_max = 3 * self.sigma_w + self.omega_0
         self._direction = direction
         self._end_step = int(1 + (self._end_time // self.dt))
+
+        print("Pulse type: {}, sigma_t: {}, omega_0: {}".format(self._type, self.sigma_t, self.omega_0))
+
+        self.create_magnitude_vector()
 
         if self._type not in TYPES:
             raise Exception("Pulse type not recognised: {}".format(self._type))
@@ -428,59 +438,51 @@ class Pulse:
         if self._type == "oscillate" and not self.omega_0:
             raise Exception("Missing arguments f_0: {}".format(self.omega_0))
 
-    def magnitude(self, time):
-        # shift the calculation
-        time -= self._start_time
+    def magnitude(self, timestep):
+        return self._magnitude_vector[timestep]
+
+    def pulse_maxima(self):
+        return np.max(self._magnitude_vector)
+
+    def create_magnitude_vector(self):
+        t = np.arange(0, self._end_time, self.dt)
         if self._type == "gd":
-            return (-time + self.pulseMid) * (1 / (self.sigma_t * math.sqrt(2 * math.pi))) * (
-                math.exp(-((time - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
-        if self._type == "oscillate":
-            return math.cos(time * self.omega_0) * (1 / (self.sigma_t * math.sqrt(2 * math.pi))) * (
-                math.exp(-((time - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
-
-    def calculate_max(self):
-        """
-        :return: the maximum of the pulse via calculating values until turning point
-        """
-        t = 0
-        biggest = 0
-        while t < self.pulseMid * 3:
-            if self._type == "gd":
-                new = (-t + self.pulseMid) * (1 / (self.sigma_t * math.sqrt(2 * math.pi))) * (
-                    math.exp(-((t - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
-            elif self._type == "oscillate":
-                new = math.cos(t * self.omega_0) * (1 / (self.sigma_t * math.sqrt(2 * math.pi))) * (
-                    math.exp(-((t - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
-            else:
-                raise Exception("Invalid pulse")
-
-            # if turning point found
-            if new > biggest:
-                biggest = new
-            t += self.dt
-        return biggest
+            self._magnitude_vector = (-t + self.pulseMid) * (1 / (self.sigma_t * np.sqrt(2 * math.pi))) * (
+                    np.exp(-((t - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
+        elif self._type == "oscillate":
+            self._magnitude_vector = np.cos(t * self.omega_0) * (1 / (self.sigma_t * np.sqrt(2 * math.pi))) * (
+                    np.exp(-((t - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
 
     def plot(self):
-        """
-        Plot the oscillating pulse
-        """
-        data = []
-        envelope = []
-        t = 0
-        while t < self._end_time:
-            if self._type == "gd":
-                value = (-t + self.pulseMid) * (1 / (self.sigma_t * math.sqrt(2 * math.pi))) * (
-                    math.exp(-((t - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
-            elif self._type == "oscillate":
-                value = math.cos(t * self.omega_0) * (1 / (self.sigma_t * math.sqrt(2 * math.pi))) * (
-                    math.exp(-((t - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
-                envelope.append((1 / (self.sigma_t * math.sqrt(2 * math.pi))) * (
-                    math.exp(-((t - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2)))))
-            t += self.dt
-            data.append(value)
-        plt.plot(data)
+        plt.plot(self._magnitude_vector)
         if self._type == "oscillate":
+            t = np.arange(0, self._end_time, self.dt)
+            envelope = (1 / (self.sigma_t * np.sqrt(2 * math.pi))) * (
+                    np.exp(-((t - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
             plt.plot(envelope)
+        plt.show()
+
+    def plot_frequency(self):
+        plt.xlabel("Frequency")
+        plt.suptitle("{} pulse".format(self._type))
+        frequencies_vector = np.linspace(-1.5 * self._omega_max, 1.5 * self._omega_max, 1000)
+        print(len(frequencies_vector))
+        # plt.plot(np.exp(-(frequencies_vector - self.omega_0) ** 2))
+        # plt.show()
+        if self._type == "oscillate":
+            plot_vector = self.sigma_t * 0.5 * (np.exp((-(frequencies_vector - self.omega_0) ** 2 / (2 * self.sigma_w ** 2))) +
+                                                np.exp((-(frequencies_vector + self.omega_0) ** 2 / (2 * self.sigma_w ** 2))))
+            plt.plot(frequencies_vector, plot_vector)
+        elif self._type == "gd":
+            plot_vector = np.abs(frequencies_vector) * self.sigma_t * np.exp(-((frequencies_vector ** 2) / (2 * self.sigma_w ** 2)))
+            plt.plot(frequencies_vector, plot_vector)
+
+        plt.show()
+
+    def plot_frequency_fft(self):
+        fft_frequencies = np.fft.fftfreq(len(self._magnitude_vector), d=self.dt)
+        fft_values = np.fft.fft(self._magnitude_vector)
+        plt.plot(fft_frequencies, np.abs(fft_values) ** 2)
         plt.show()
 
     def get_maximum(self):

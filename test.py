@@ -2,15 +2,14 @@
 
 from solver import Solver
 from analyser import FileLoader
-
-from analyser import FileLoader
+import math
 import json
 
 # initiate variables
 sigma_w = 1 * 10 ** 9  # frequency bandwidth
 omega_0 = 5 * 10 ** 9  # central frequency
 
-print(2.99 * (10 ** 8) / omega_0)
+print(2 * math.pi * 2.99 * (10 ** 8) / omega_0)
 s = 10  # mesh points per wavelength
 stability = 0.2  # time mesh stability factor
 
@@ -25,16 +24,13 @@ mat = solver.create_material()
 
 mat.set_material_rect((2, 2), (2.8, 2.8), 3)
 
-# solver.save('test_json')
-# solver.solve(realtime=False)
+solver.save('test_json')
+solver.solve(realtime=False)
 
 fileLoad = FileLoader('test_json')
 fileLoad.play()
 
-exit()
 with open ('test_json.txt') as json_file:
     data = json.load(json_file)
 
-print(data)
-
-print(data['end_time'] / data['dt'])
+print("Number of simulation steps: {}".format(int(data['end_time'] / (data['dt'] * data['step_frequency']))))
