@@ -68,6 +68,7 @@ class Solver:
         self.save_dict_json['length_x'] = self.length_x
         self.save_dict_json['length_y'] = self.length_y
         self.save_dict_json['stability'] = self.stability
+        self.save_dict_json['omega_max'] = self.omega_max
 
         self.save_dict_json['end_time'] = self.end_time
         self.save_dict_json['step_frequency'] = self.step_frequency
@@ -92,7 +93,7 @@ class Solver:
         self.dt = min(self.ds * self.stability / C, math.pi / self.omega_max)  # mesh stability and Nyquist criterion
         self.size = int(self.length_x / self.ds)
 
-        print("Smallest wavelength: {}\nMatrix size: {}".format(self.lambda_min, self.size))
+        print("Smallest wavelength: {}\nLargest frequency: {}\nMatrix size: {}".format(self.lambda_min, self.omega_max, self.size))
 
         # Resize matrices
         self.h = np.zeros((self.size, self.size))
@@ -124,7 +125,6 @@ class Solver:
 
     def add_oscillating_pulse(self, sigma_w, location, omega_0, start_time=0, direction=None):
         if 3 * sigma_w + omega_0 > self.omega_max:
-            print(3 * sigma_w + omega_0, self.omega_max)
             self.omega_max = 3 * sigma_w + omega_0
             self.update_constants()
         location = [self.convert(i) for i in location]
@@ -240,7 +240,7 @@ class Solver:
 
         print('Solver max:', pulse_max)
 
-    def solve(self, realtime=True, loading_bar=True, step_frequency=5):
+    def solve(self, realtime=True, step_frequency=5):
 
         if not self.ready():
             raise Exception('No pulse added')
@@ -287,12 +287,11 @@ class Solver:
 
         plt.show()
 
-    def plot_and_save(self, frames, step_frequency, loading_bar=True):
+    def plot_and_save(self, frames, step_frequency):
         for time in frames:
             self.update(time)
-            if loading_bar:
-                sys.stdout.write("\r%d%%" % (100 * self.step // self.steps))
-                sys.stdout.flush()
+            sys.stdout.write("\r%d%%" % (100 * self.step // self.steps))
+            sys.stdout.flush()
             if self.step % step_frequency == 0 and self.save_file:
                 self.h_list.append(self.h)
 
@@ -415,19 +414,22 @@ class Pulse:
         self.omega_0 = omega_0
         self.dt = dt
         self.pulseMid = 3 * self.sigma_t  # the middle of the pulse (approximately 3 standard deviations)
-        self._magnitude_vector = None
+
         self._start_time = start_time
         self._end_time = self._start_time + self.pulseMid * 8
         self._location = location
         self._type = type
-        self._maximum = self.pulse_maxima()
+
         self._omega_max = 3 * self.sigma_w + self.omega_0
         self._direction = direction
         self._end_step = int(1 + (self._end_time // self.dt))
 
         print("Pulse type: {}, sigma_t: {}, omega_0: {}".format(self._type, self.sigma_t, self.omega_0))
 
+        self._time_vector = np.arange(0, self._end_time, self.dt)
+        self._magnitude_vector = None
         self.create_magnitude_vector()
+        self._maximum = self.pulse_maxima()
 
         if self._type not in TYPES:
             raise Exception("Pulse type not recognised: {}".format(self._type))
@@ -445,7 +447,7 @@ class Pulse:
         return np.max(self._magnitude_vector)
 
     def create_magnitude_vector(self):
-        t = np.arange(0, self._end_time, self.dt)
+        t = self._time_vector
         if self._type == "gd":
             self._magnitude_vector = (-t + self.pulseMid) * (1 / (self.sigma_t * np.sqrt(2 * math.pi))) * (
                     np.exp(-((t - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
@@ -454,21 +456,22 @@ class Pulse:
                     np.exp(-((t - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
 
     def plot(self):
-        plt.plot(self._magnitude_vector)
+        plt.plot(self._time_vector, self._magnitude_vector)
         if self._type == "oscillate":
             t = np.arange(0, self._end_time, self.dt)
             envelope = (1 / (self.sigma_t * np.sqrt(2 * math.pi))) * (
                     np.exp(-((t - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
-            plt.plot(envelope)
+            plt.plot(self._time_vector, envelope)
+
+        plt.suptitle("{} pulse".format(self._type))
+        plt.xlabel("Time (seconds)")
+        plt.ylabel("Magnitude")
         plt.show()
 
     def plot_frequency(self):
         plt.xlabel("Frequency")
         plt.suptitle("{} pulse".format(self._type))
-        frequencies_vector = np.linspace(-1.5 * self._omega_max, 1.5 * self._omega_max, 1000)
-        print(len(frequencies_vector))
-        # plt.plot(np.exp(-(frequencies_vector - self.omega_0) ** 2))
-        # plt.show()
+        frequencies_vector = np.linspace(self._omega_max, 1000)
         if self._type == "oscillate":
             plot_vector = self.sigma_t * 0.5 * (np.exp((-(frequencies_vector - self.omega_0) ** 2 / (2 * self.sigma_w ** 2))) +
                                                 np.exp((-(frequencies_vector + self.omega_0) ** 2 / (2 * self.sigma_w ** 2))))
@@ -476,13 +479,19 @@ class Pulse:
         elif self._type == "gd":
             plot_vector = np.abs(frequencies_vector) * self.sigma_t * np.exp(-((frequencies_vector ** 2) / (2 * self.sigma_w ** 2)))
             plt.plot(frequencies_vector, plot_vector)
-
         plt.show()
 
     def plot_frequency_fft(self):
-        fft_frequencies = np.fft.fftfreq(len(self._magnitude_vector), d=self.dt)
+        # Provides number of samples and their spacing in time domain
+        # Multiply by 2π to obtain frequency axis in units of rad/s
+        fft_frequencies = 2 * np.pi * np.fft.fftfreq(len(self._magnitude_vector), d=self.dt)
         fft_values = np.fft.fft(self._magnitude_vector)
-        plt.plot(fft_frequencies, np.abs(fft_values) ** 2)
+        freq_mask = np.logical_and(fft_frequencies > 0, fft_frequencies < self._omega_max)
+        print(freq_mask)
+        print(np.max(fft_frequencies[freq_mask]))
+
+        # multiply by 2π for changing the units to rad / s instead of Hz
+        plt.plot(fft_frequencies[freq_mask], np.abs(fft_values[freq_mask]) ** 2)
         plt.show()
 
     def get_maximum(self):
