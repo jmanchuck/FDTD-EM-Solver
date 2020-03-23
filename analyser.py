@@ -40,8 +40,10 @@ class FileLoader:
             matrix.set_array(self.h_matrix[i])
             fig.suptitle("Time step: {}".format(i * self.step_frequency))
 
-        matrix = ax.imshow(self.h_matrix[0], vmax=darkness_factor*np.max(self.h_matrix), vmin=-darkness_factor*np.max(self.h_matrix), cmap='seismic')
+        matrix = ax.imshow(self.h_matrix[0], vmax=darkness_factor*np.max(self.h_matrix), vmin=-darkness_factor*np.max(self.h_matrix), extent=[0, self.length_x, self.length_y, 0], cmap='seismic')
         plt.colorbar(matrix)
+        plt.ylabel("Y (m)")
+        plt.xlabel("X (m)")
         ani = animation.FuncAnimation(fig, animate, frames=len(self.h_matrix), interval=interval, repeat=False)
         plt.show()
 

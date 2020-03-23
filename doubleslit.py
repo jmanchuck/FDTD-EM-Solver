@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 import math
 
 # initiate variables
-sigma_w = 5.0 * 10 ** 9  # frequency bandwidth
-omega_0 = 2 * 10 ** 9  # central frequency
+sigma_w = 3.0 * 10 ** 9  # frequency bandwidth
+omega_0 = 6 * 10 ** 9  # central frequency
 s = 10  # mesh points per wavelength
-stability = 1 / 20  # time mesh stability factor
+stability = 1 / 10  # time mesh stability factor
 C = 2.99 * (10 ** 8)
 
 wavelength = 2 * math.pi * C / omega_0  # c = f * lambda, f = omega / 2pi
@@ -21,11 +21,11 @@ print("Simulation time (seconds):", simulation_time)
 solver = Solver(points_per_wavelength=s, stability=stability, eps_r_max=1, mu_r_max=1, simulation_size=simulation_size, simulation_time= simulation_time)
 
 pulse1 = solver.add_oscillating_pulse(sigma_w, (2, 0.1), omega_0, direction="right")
+# print("dt:", solver.dt)
 
 pulse1.plot()
 pulse1.plot_frequency()
 pulse1.plot_frequency_fft()
-
 material = solver.create_material()
 
 # double slits where slit separation is wavelength, slit width is wavelength
@@ -37,8 +37,8 @@ solver.set_reflect_square((1.76, 1), (2.24, 1.05))
 solver.set_reflect_square((2.38, 1), (simulation_size, 1.05))
 solver.set_reflect_boundaries(up=False, down=False, left=False, right=False)
 
-solver.save("far_spaced_double_slit")
-solver.solve(realtime=False)
+solver.save("d_slit_test")
+solver.solve(realtime=False, step_frequency=2)
 
-# fileLoad = FileLoader("far_spaced_double_slit")
-# fileLoad.play(1)
+fileLoad = FileLoader("d_slit_test")
+fileLoad.play(1)
