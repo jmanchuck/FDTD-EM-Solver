@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import json
+import time
 
 
 class FileLoader:
@@ -14,6 +15,7 @@ class FileLoader:
 
     def load(self):
         self.h_matrix = np.load(self.file_name + ".npy")
+
         try:
             with open(self.file_name + ".txt") as json_file:
                 self.constants = json.load(json_file)
@@ -31,6 +33,8 @@ class FileLoader:
 
         self.end_time = self.constants['end_time']
         self.step_frequency = self.constants['step_frequency']
+
+        self.pulses = self.constants['pulses']
 
     def play(self, interval=100, colourdepth=0.8):
         darkness_factor = 1 - colourdepth
@@ -95,6 +99,7 @@ class DataCollector:
         self.fft_frequencies = None  # the x axis of the plot
 
         self.unpack_constants()
+        self.collect_all()
 
     def unpack_constants(self):
         self.dt = self.constants['dt']
@@ -121,24 +126,32 @@ class DataCollector:
     def collect_all(self):
         self.data = self.matrix[:, self.i_pos, self.j_pos]
 
-    def plot_time(self):
+    def plot_time(self, show=True):
         plt.suptitle("Detected pulse")
         plt.xlabel("Time (seconds)")
         plt.ylabel("Magnitude")
-        plt.plot(self.time_vector, self.data)
+        if show:
+            plt.plot(self.time_vector, self.data)
 
     def fft(self):
         # The sample spacing is NOT every timestep, since data collection may have happened every few timesteps
         # Multiply by 2π for frequency in units rad/s
-        self.fft_frequencies = 2 * np.pi * np.fft.fftfreq(len(self.data), d=self.dt * self.step_frequency)
+        padded_zero_vector = np.zeros(2 ** 14 - len(self.data))
+        padded_magnitude_vector = np.concatenate((self.data, padded_zero_vector))
+        print("Data magnitude vector length:", len(self.data))
+
+        self.fft_frequencies = 2 * np.pi * np.fft.fftfreq(len(padded_magnitude_vector), d=self.dt * self.step_frequency)
 
         # Frequency mask to plot frequencies larger than 0 and smaller than bandwidth
         freq_mask = np.logical_and(self.fft_frequencies > 0, self.fft_frequencies < self.omega_max)
-        self.fft_amplitude = np.absolute(np.fft.fft(self.data)[freq_mask]) ** 2
+        self.fft_amplitude = np.absolute(np.fft.fft(padded_magnitude_vector)[freq_mask]) ** 2
         self.fft_frequencies = self.fft_frequencies[freq_mask]
 
-    def plot_frequency(self):
-        plt.plot(self.fft_frequencies, self.fft_amplitude)
+    def plot_frequency(self, show=True):
+        if self.fft_amplitude is None:
+            self.fft()
+        if show:
+            plt.plot(self.fft_frequencies, self.fft_amplitude)
 
     def get_data(self):
         return self.data

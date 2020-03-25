@@ -1,4 +1,6 @@
+import time
 from analyser import FileLoader
+from solver import Pulse
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -9,9 +11,20 @@ data_collectors = []
 
 got_frequencies = False
 frequency_axis = None
+input_pulse = Pulse(fileLoad.pulses[0]['sigma_w'], fileLoad.dt, 0, fileLoad.pulses[0]['type'], fileLoad.end_time, omega_0=fileLoad.pulses[0]['omega_0'], step_frequency=fileLoad.step_frequency)
 
-for i in range(len(fileLoad.get_matrix()[0])):
-    vertical_pos = i * fileLoad.ds
+
+data_middle = fileLoad.create_data_collector((2, 3.95))
+data_middle.collect_all()
+data_middle.fft()
+data_middle.plot_frequency(show=True)
+print(len(data_middle.fft_amplitude))
+
+input_pulse.plot_frequency_fft()
+exit(0)
+
+for i in range(len(fileLoad.get_matrix()[0]) // 2):
+    vertical_pos = 2 * i * fileLoad.ds
     data = fileLoad.create_data_collector((vertical_pos, 3.9))
     data.collect_all()
     data.fft()
@@ -21,6 +34,7 @@ for i in range(len(fileLoad.get_matrix()[0])):
         got_frequencies = True
     data.plot_frequency()
     data_collectors.append(data.fft_amplitude)
+
 plt.figure()
 plt.title("2 slit diffraction")
 

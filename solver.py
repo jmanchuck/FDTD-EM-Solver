@@ -81,7 +81,8 @@ class Solver:
                 'omega_0': pulse.omega_0,
                 'omega_max': pulse.get_omega_max(),
                 'row': pulse.get_row(),
-                'col': pulse.get_col()
+                'col': pulse.get_col(),
+                'type': pulse.get_type()
             })
 
         with open(self.save_file_name + '.txt', 'w') as outfile:
@@ -405,7 +406,8 @@ class MaterialArray:
 
 class Pulse:
 
-    def __init__(self, sigma_w, dt, location, start_time, type, sim_end_time, omega_0=0, direction=None):
+    def __init__(self, sigma_w, dt, start_time, type, sim_end_time, location=None, omega_0=0, direction=None, step_frequency=1):
+        print("--- Pulse Info ---")
         TYPES = ["gd", "oscillate"]
         DIRECTIONS = ["up", "down", "left", "right", None]
         self.sigma_w = sigma_w
@@ -419,6 +421,7 @@ class Pulse:
         self._sim_end_time = sim_end_time
         self._location = location
         self._type = type
+        self.step_frequency = step_frequency
 
         self._omega_max = 3 * self.sigma_w + self.omega_0
         self._direction = direction
@@ -426,7 +429,7 @@ class Pulse:
 
         print("Pulse type: {}, sigma_w: {}, omega_0: {}, omega_max: {}".format(self._type, self.sigma_w, self.omega_0, self._omega_max))
 
-        self._time_vector = np.arange(0, self._end_time, self.dt)
+        self._time_vector = np.arange(0, self._sim_end_time, self.dt)
         self._magnitude_vector = None
         self.create_magnitude_vector()
         self._maximum = self.pulse_maxima()
@@ -456,7 +459,7 @@ class Pulse:
                     np.exp(-((t - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
         print("Pulse duration: {} seconds, {} steps".format(self._time_vector[-1], len(self._time_vector)))
 
-    def plot(self, global_time=True):
+    def plot_time(self, scaled_plot=True, show=True):
         plt.plot(self._time_vector, self._magnitude_vector)
         if self._type == "oscillate":
             t = np.arange(0, self._end_time, self.dt)
@@ -467,11 +470,13 @@ class Pulse:
         plt.suptitle("{} pulse".format(self._type))
         plt.xlabel("Time (seconds)")
         plt.ylabel("Magnitude")
-        if global_time:
-            plt.xlim(0, self._sim_end_time)
-        plt.show()
+        if scaled_plot:
+            plt.xlim(0, self._end_time)
 
-    def plot_frequency(self):
+        if show:
+            plt.show()
+
+    def plot_frequency(self, show=True):
         plt.xlabel("Frequency")
         plt.suptitle("{} pulse".format(self._type))
         frequencies_vector = np.linspace(self._omega_max, 1000)
@@ -482,21 +487,30 @@ class Pulse:
         elif self._type == "gd":
             plot_vector = np.abs(frequencies_vector) * self.sigma_t * np.exp(-((frequencies_vector ** 2) / (2 * self.sigma_w ** 2)))
             plt.plot(frequencies_vector, plot_vector)
-        plt.show()
 
-    def plot_frequency_fft(self):
+        if show:
+            plt.show()
+
+    def plot_frequency_fft(self, show=True):
+        magnitude_vector = self._magnitude_vector[::self.step_frequency]
+
         # Provides number of samples and their spacing in time domain
         # Multiply by 2π to obtain frequency axis in units of rad/s
-        fft_frequencies = 2 * np.pi * np.fft.fftfreq(len(self._magnitude_vector), d=self.dt)
-        fft_values = np.fft.fft(self._magnitude_vector)
+        padded_zero_vector = np.zeros(2 ** 14 - len(magnitude_vector))
+        print("Input pulse magnitude vector length:", len(magnitude_vector))
+        padded_magnitude_vector = np.concatenate((magnitude_vector, padded_zero_vector))
+        fft_frequencies = 2 * np.pi * np.fft.fftfreq(len(padded_magnitude_vector), d=self.dt * self.step_frequency)
+        fft_values = np.fft.fft(padded_magnitude_vector)
         freq_mask = np.logical_and(fft_frequencies > 0, fft_frequencies < self._omega_max)
         print("Number of frequency points:", len(fft_frequencies[freq_mask]))
 
         # multiply by 2π for changing the units to rad / s instead of Hz
         plt.plot(fft_frequencies[freq_mask], np.abs(fft_values[freq_mask]) ** 2)
-        plt.suptitle("{} pulse (FFT)".format(self._type))
-        plt.xlabel("Frequency (rad/s)")
-        plt.show()
+
+        if show:
+            plt.suptitle("{} pulse (FFT)".format(self._type))
+            plt.xlabel("Frequency (rad/s)")
+            plt.show()
 
     def get_maximum(self):
         return self._maximum
@@ -533,7 +547,7 @@ def test():
 
     print(2.99 * (10 ** 8) / omega_0)
     s = 10  # mesh points per wavelength
-    stability = 0.2  # time mesh stability factor
+    stability = 0.1  # time mesh stability factor
 
     # initiate solver with user input variables
     solver = Solver(points_per_wavelength=s, stability=stability, eps_r_max=4, mu_r_max=1, simulation_size=3,
@@ -542,7 +556,7 @@ def test():
     # add pulses (a pulse must be added to run the simulation)
     pulse = solver.add_oscillating_pulse(sigma_w, (0.8, 0.4), omega_0)  # this adds a point pulse
 
-    pulse.plot()
+    pulse.plot_time()
     pulse.plot_frequency()
     pulse.plot_frequency_fft()
 
@@ -550,9 +564,8 @@ def test():
 
     mat.set_material_rect((2, 2), (2.8, 2.8), 3)
 
-    exit()
-
     solver.solve()
+
 
 if __name__ == '__main__':
     test()

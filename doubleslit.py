@@ -1,6 +1,5 @@
 from solver import Solver
 from analyser import FileLoader
-import matplotlib.pyplot as plt
 import math
 
 # initiate variables
@@ -21,11 +20,11 @@ print("Simulation time (seconds):", simulation_time)
 solver = Solver(points_per_wavelength=s, stability=stability, eps_r_max=1, mu_r_max=1, simulation_size=simulation_size, simulation_time= simulation_time)
 
 pulse1 = solver.add_oscillating_pulse(sigma_w, (2, 0.1), omega_0, direction="right")
-# print("dt:", solver.dt)
 
-pulse1.plot()
-pulse1.plot_frequency()
-pulse1.plot_frequency_fft()
+# pulse1.plot()
+# pulse1.plot_frequency()
+# pulse1.plot_frequency_fft()
+exit()
 material = solver.create_material()
 
 # double slits where slit separation is wavelength, slit width is wavelength

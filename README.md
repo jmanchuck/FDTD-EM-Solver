@@ -31,7 +31,7 @@ material.set_material_convex(centre=(1.5, 1.5), radius=2, thickness=1, epsilon_r
 ```
 A plot of the materials can be shown using the following method:
 ```python
-material.plot()
+material.plot_time()
 ```
 
 ## TODO
