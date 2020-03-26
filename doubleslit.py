@@ -21,10 +21,6 @@ solver = Solver(points_per_wavelength=s, stability=stability, eps_r_max=1, mu_r_
 
 pulse1 = solver.add_oscillating_pulse(sigma_w, (2, 0.1), omega_0, direction="right")
 
-# pulse1.plot()
-# pulse1.plot_frequency()
-# pulse1.plot_frequency_fft()
-exit()
 material = solver.create_material()
 
 # double slits where slit separation is wavelength, slit width is wavelength

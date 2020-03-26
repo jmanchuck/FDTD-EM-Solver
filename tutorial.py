@@ -1,5 +1,5 @@
 from solver import Solver
-from analyser import FileLoader, DataCollector
+from analyser import FileLoader
 
 # initiate variables
 sigma_w = 1 * 10 ** 9  # frequency bandwidth

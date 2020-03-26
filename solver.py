@@ -61,7 +61,7 @@ class Solver:
         self.save_file_name = None
         self.save_file = False
         self.save_dict_json = dict()
-        self.step_frequency = None
+        self.step_frequency = 5
 
     def save_to_json(self):
         self.save_dict_json['dt'] = self.dt
@@ -270,14 +270,14 @@ class Solver:
     def plot_and_show(self):
         # instantiate animation plotting variables
         fig, ax1 = plt.subplots(figsize=(6, 6))
-        im = ax1.imshow(self.h, animated=True, vmax=self.pulses_max, vmin=-self.pulses_max, aspect='auto', cmap='seismic')
+        im = ax1.imshow(self.h, animated=True, extent=[0, self.length_x, self.length_y, 0], vmax=self.pulses_max, vmin=-self.pulses_max, aspect='auto', cmap='seismic')
         ax1.set_aspect('equal', 'box')
         ax1.xaxis.set_ticks_position('top')
         ax1.xaxis.set_label_position('top')
         fig.colorbar(im, ax=ax1)
 
         def animate(time):
-            if self.step % 20 == 0:
+            if self.step % self.step_frequency == 0:
                 fig.suptitle("Time Step = {}".format(self.step))
                 if self.save_file:
                     self.h_list.append(self.h)
@@ -397,10 +397,9 @@ class MaterialArray:
 
     def plot(self):
         fig, ax = plt.subplots()
-        image = ax.imshow(self.eps_arr, vmax=(np.max(self.eps_arr)), vmin=0, aspect='auto')
+        image = ax.imshow(self.eps_arr, extent=([0, self.length_x, self.length_y, 0]), vmax=(np.max(self.eps_arr)), vmin=0, aspect='auto')
         ax.set_aspect('equal', 'box')
         ax.set_title('Material (epsilon relative)')
-
         plt.show()
 
 
@@ -461,15 +460,18 @@ class Pulse:
 
     def plot_time(self, scaled_plot=True, show=True):
         plt.plot(self._time_vector, self._magnitude_vector)
+        print(len(self._time_vector), len(self._magnitude_vector))
+
         if self._type == "oscillate":
-            t = np.arange(0, self._end_time, self.dt)
+            local_time_vector = np.arange(0, self._end_time, self.dt)
             envelope = (1 / (self.sigma_t * np.sqrt(2 * math.pi))) * (
-                    np.exp(-((t - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
-            plt.plot(self._time_vector, envelope)
+                    np.exp(-((local_time_vector - self.pulseMid) ** 2) / (2 * (self.sigma_t ** 2))))
+            plt.plot(local_time_vector, envelope)
 
         plt.suptitle("{} pulse".format(self._type))
         plt.xlabel("Time (seconds)")
         plt.ylabel("Magnitude")
+
         if scaled_plot:
             plt.xlim(0, self._end_time)
 
@@ -493,14 +495,12 @@ class Pulse:
 
     def plot_frequency_fft(self, show=True):
         magnitude_vector = self._magnitude_vector[::self.step_frequency]
-
-        # Provides number of samples and their spacing in time domain
-        # Multiply by 2π to obtain frequency axis in units of rad/s
         padded_zero_vector = np.zeros(2 ** 14 - len(magnitude_vector))
-        print("Input pulse magnitude vector length:", len(magnitude_vector))
         padded_magnitude_vector = np.concatenate((magnitude_vector, padded_zero_vector))
+
+        # Multiply by 2π to obtain frequency axis in units of rad/s
         fft_frequencies = 2 * np.pi * np.fft.fftfreq(len(padded_magnitude_vector), d=self.dt * self.step_frequency)
-        fft_values = np.fft.fft(padded_magnitude_vector)
+        fft_values = np.fft.fft(padded_magnitude_vector) * self.dt * self.step_frequency
         freq_mask = np.logical_and(fft_frequencies > 0, fft_frequencies < self._omega_max)
         print("Number of frequency points:", len(fft_frequencies[freq_mask]))
 
