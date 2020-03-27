@@ -4,7 +4,7 @@ FDTD EM Wave Simulations in 2D
 A 3rd year project at KCL..
 
 ## Requirements
-numpy, matplotlib
+numpy, matplotlib, json
 
 ## Usage
 See ```tutorial.py``` for full example.
@@ -26,7 +26,7 @@ material = solver.create_material()
 ```
 This object has methods that allows adding different shaped materials. For example:
 ```python
-material.set_material_rect(upper_left= (x1, y1), lower_right=(x2, y2))
+material.set_material_rect(upper_left=(x1, y1), lower_right=(x2, y2))
 material.set_material_convex(centre=(1.5, 1.5), radius=2, thickness=1, epsilon_rel=5)
 ```
 A plot of the materials can be shown using the following method:

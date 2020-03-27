@@ -1,4 +1,3 @@
-import time
 from analyser import FileLoader
 from solver import Pulse
 import matplotlib.pyplot as plt
@@ -15,8 +14,8 @@ input_pulse = Pulse(fileLoad.pulses[0]['sigma_w'], fileLoad.dt, 0, fileLoad.puls
 # input_pulse.plot_frequency_fft()
 input_data = fileLoad.create_data_collector((2, 0.2))
 
-for i in range(len(fileLoad.get_matrix()[0]) // 2):
-    vertical_pos = 2 * i * fileLoad.ds
+for i in range(len(fileLoad.get_matrix()[0]) // 10):
+    vertical_pos = 10 * i * fileLoad.ds
     data = fileLoad.create_data_collector((vertical_pos, 3.9))
     data.fft()
 

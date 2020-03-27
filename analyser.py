@@ -10,13 +10,16 @@ class FileLoader:
         self.file_name = file_name
         self.constants = None
         self.h_matrix = None
+        self.size = None
         self.load()
 
     def load(self):
+        print("Loading npy file...")
         self.h_matrix = np.load(self.file_name + ".npy")
 
         try:
             with open(self.file_name + ".txt") as json_file:
+                print("Loading txt file...")
                 self.constants = json.load(json_file)
                 self.unpack_constants_from_json()
         except FileNotFoundError:
@@ -32,6 +35,9 @@ class FileLoader:
 
         self.end_time = self.constants['end_time']
         self.step_frequency = self.constants['step_frequency']
+
+        self.material = np.array(self.constants['material'])
+        self.size = len(self.material)
 
         self.pulses = self.constants['pulses']
 
@@ -57,7 +63,7 @@ class FileLoader:
 
         im = plt.imshow(self.h_matrix[time_step], vmax = np.max(self.h_matrix), vmin=-np.max(self.h_matrix),  extent=[0, self.length_x, self.length_y, 0], cmap='seismic')
         plt.colorbar(im)
-        plt.suptitle(self.file_name, "Time: " + time)
+        plt.suptitle("Time: " + str(time))
         plt.ylabel("Y (m)")
         plt.xlabel("X (m)")
         plt.show()
@@ -74,16 +80,6 @@ class FileLoader:
 
 
 class DataCollector:
-
-    """
-    This is the Data Collector.
-
-    You can collect data from ANY of the 3 matrices (Ex, Ey or Hz) at 1 specific location (specific index).
-    This object is accessed from the solver part of the code and automatically checks if you've added
-    Data Collectors. You can add them using the method under solver: add_data_collector.
-
-    Iterate through the list of Data Collectors in the solver to see plots of your data or fourier transforms of it.
-    """
 
     def __init__(self, matrix, location, constants):
         self.matrix = matrix
@@ -149,4 +145,5 @@ class DataCollector:
 
         plt.plot(self.fft_frequencies, self.fft_amplitude)
         if show:
+            plt.xlabel("Frequency (rad/s)")
             plt.show()
