@@ -12,7 +12,7 @@ C = 2.99 * (10 ** 8)
 wavelength = 2 * math.pi * C / omega_0  # c = f * lambda, f = omega / 2pi
 
 simulation_size = 4
-simulation_time = 1.5 * simulation_size / C
+simulation_time = 10 * simulation_size / C
 
 print("Simulation time (seconds):", simulation_time)
 
@@ -20,6 +20,8 @@ print("Simulation time (seconds):", simulation_time)
 solver = Solver(points_per_wavelength=s, stability=stability, eps_r_max=1, mu_r_max=1, simulation_size=simulation_size, simulation_time= simulation_time)
 
 pulse1 = solver.add_oscillating_pulse(sigma_w, (2, 0.1), omega_0, direction="right")
+
+pulse1 = solver.add_
 
 material = solver.create_material()
 
@@ -32,8 +34,8 @@ solver.set_reflect_square((1.76, 1), (2.24, 1.05))
 solver.set_reflect_square((2.38, 1), (simulation_size, 1.05))
 solver.set_reflect_boundaries(up=False, down=False, left=False, right=False)
 
-solver.save("d_slit_test")
-solver.solve(realtime=False, step_frequency=2)
+solver.save("double_slit_short_pulse")
+solver.solve(realtime=False, step_frequency=5)
 
-fileLoad = FileLoader("d_slit_test")
+fileLoad = FileLoader("double_slit_short_pulse")
 fileLoad.play(1)

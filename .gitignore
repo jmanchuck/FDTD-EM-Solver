@@ -4,3 +4,7 @@
 *.iml
 *.txt
 waveguide.py
+waveguide_energy/
+waveguide_freqs/
+waveguide_energy/*
+waveguide_freqs/*

@@ -41,7 +41,7 @@ class FileLoader:
 
         self.pulses = self.constants['pulses']
 
-    def play(self, interval=100, colourdepth=0.8):
+    def play(self, interval=1, colourdepth=0.8, jupyter=False):
         darkness_factor = 1 - colourdepth
         fig, ax = plt.subplots()
 
@@ -49,11 +49,15 @@ class FileLoader:
             matrix.set_array(self.h_matrix[i])
             fig.suptitle("Time step: {}".format(i * self.step_frequency))
 
-        matrix = ax.imshow(self.h_matrix[0], vmax=darkness_factor*np.max(self.h_matrix), vmin=-darkness_factor*np.max(self.h_matrix), extent=[0, self.length_x, self.length_y, 0], cmap='seismic')
+        matrix = ax.imshow(self.h_matrix[0], vmax=darkness_factor * np.max(self.h_matrix),
+                           vmin=-darkness_factor * np.max(self.h_matrix), extent=[0, self.length_x, self.length_y, 0],
+                           cmap='seismic')
         plt.colorbar(matrix)
         plt.ylabel("Y (m)")
         plt.xlabel("X (m)")
         ani = animation.FuncAnimation(fig, animate, frames=len(self.h_matrix), interval=interval, repeat=False)
+        if jupyter:
+            return ani
         plt.show()
 
     def plot_matrix_at_time(self, time):
@@ -61,7 +65,8 @@ class FileLoader:
 
         time_step = int(time / (self.dt * self.step_frequency))
 
-        im = plt.imshow(self.h_matrix[time_step], vmax = np.max(self.h_matrix), vmin=-np.max(self.h_matrix),  extent=[0, self.length_x, self.length_y, 0], cmap='seismic')
+        im = plt.imshow(self.h_matrix[time_step], vmax=np.max(self.h_matrix), vmin=-np.max(self.h_matrix),
+                        extent=[0, self.length_x, self.length_y, 0], cmap='seismic')
         plt.colorbar(im)
         plt.suptitle("Time: " + str(time))
         plt.ylabel("Y (m)")
@@ -90,7 +95,7 @@ class DataCollector:
         self.data = []
 
         # fast fourier transform plots
-        self.fft_amplitude = None          # the y axis of the plot
+        self.fft_amplitude = None  # the y axis of the plot
         self.fft_frequencies = None  # the x axis of the plot
 
         self.unpack_constants()
@@ -136,14 +141,19 @@ class DataCollector:
 
         # Frequency mask to plot frequencies larger than 0 and smaller than bandwidth
         freq_mask = np.logical_and(self.fft_frequencies > 0, self.fft_frequencies < self.omega_max)
-        self.fft_amplitude = np.absolute(np.fft.fft(padded_magnitude_vector)[freq_mask] * self.dt * self.step_frequency) ** 2
+        self.fft_amplitude = np.absolute(np.fft.fft(padded_magnitude_vector)[freq_mask]) ** 2
         self.fft_frequencies = self.fft_frequencies[freq_mask]
 
-    def plot_frequency(self, show=True):
+    def plot_frequency(self, show=True, title=None):
         if self.fft_amplitude is None:
             self.fft()
 
+        if title is not None:
+            plt.suptitle = title
+
+        plt.xlabel("Frequency (rad/s)")
+        plt.ylabel("Amplitude")
+
         plt.plot(self.fft_frequencies, self.fft_amplitude)
         if show:
-            plt.xlabel("Frequency (rad/s)")
             plt.show()

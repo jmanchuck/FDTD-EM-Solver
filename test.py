@@ -1,12 +1,13 @@
-from analyser import FileLoader
-import matplotlib.pyplot as plt
-import numpy as np
+from analyser import FileLoader as FL
 
-fileLoad = FileLoader("d_slit_test")
+fL = FL("test")
 
-data = fileLoad.create_data_collector((2, 0.2))
-data.collect_all()
-data.fft()
-data.plot_frequency()
-print(len(data.fft_frequencies))
-plt.show()
+# fL.play()
+
+inpt = fL.create_data_collector((0.7, 0.3))
+outpt = fL.create_data_collector((3.5, 3))
+
+inpt.fft(), outpt.fft()
+
+inpt.plot_time(show=False)
+outpt.plot_time(show=True)
